@@ -8,12 +8,11 @@
 // Required Cloudflare secrets (set via: wrangler secret put NAME):
 //   FIREBASE_SA_EMAIL       — service account email
 //   FIREBASE_SA_PRIVATE_KEY — service account private key (PEM, with literal \n)
+//   FIREBASE_API_KEY        — Firebase Web API key
+//   FIREBASE_PROJECT_ID     — Firebase project ID
+//   ALLOWED_ORIGIN          — allowed CORS origin (e.g. https://your-app.web.app)
 //
 // View live logs: wrangler tail
-
-const ALLOWED_ORIGIN = 'https://savings-16206.web.app';
-const FIREBASE_API_KEY = 'AIzaSyCzvmkvoxXa-1QKw4IwKLt1SQ5lkcsQraI';
-const FIREBASE_PROJECT_ID = 'savings-16206';
 
 const YAHOO_SEARCH = 'https://query1.finance.yahoo.com/v1/finance/search';
 const YAHOO_CHART  = 'https://query2.finance.yahoo.com/v8/finance/chart';
@@ -28,19 +27,20 @@ export default {
         const url = new URL(request.url);
         const origin = request.headers.get('Origin') || '(no origin)';
         const method = request.method;
+        const allowedOrigin = env.ALLOWED_ORIGIN || '';
 
         console.log(`[${method}] ${url.pathname}${url.search} | origin: ${origin}`);
 
         // CORS preflight
         if (method === 'OPTIONS') {
             console.log('→ preflight OK');
-            return corsResponse(null, 204, origin);
+            return corsResponse(null, 204, origin, allowedOrigin);
         }
 
         // Password reset — POST only
         if (url.pathname === '/reset-password') {
-            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin);
-            return handleResetPassword(request, env, origin);
+            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
+            return handleResetPassword(request, env, origin, allowedOrigin);
         }
 
         let upstreamUrl;
@@ -55,7 +55,7 @@ export default {
             upstreamUrl = `${YAHOO_CHART}/${ticker}?${url.searchParams}`;
         } else {
             console.log(`→ 404 unknown path: ${url.pathname}`);
-            return corsResponse(JSON.stringify({ error: 'Not found' }), 404, origin);
+            return corsResponse(JSON.stringify({ error: 'Not found' }), 404, origin, allowedOrigin);
         }
 
         console.log(`→ upstream: ${upstreamUrl}`);
@@ -67,67 +67,67 @@ export default {
             if (upstream.status !== 200) {
                 console.log(`→ yahoo body: ${data.slice(0, 500)}`);
             }
-            return corsResponse(data, upstream.status, origin, 'application/json');
+            return corsResponse(data, upstream.status, origin, allowedOrigin, 'application/json');
         } catch (e) {
             console.log(`→ fetch error: ${e.message}`);
-            return corsResponse(JSON.stringify({ error: e.message }), 502, origin);
+            return corsResponse(JSON.stringify({ error: e.message }), 502, origin, allowedOrigin);
         }
     },
 };
 
 // ─── Password Reset Handler ───────────────────────────────────────────────────
 
-async function handleResetPassword(request, env, origin) {
+async function handleResetPassword(request, env, origin, allowedOrigin) {
     // 1. Extract ID token
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-        return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin);
+        return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin, allowedOrigin);
     }
     const idToken = authHeader.slice(7);
 
     // 2. Parse body
     let body;
     try { body = await request.json(); }
-    catch { return corsResponse(JSON.stringify({ error: 'Invalid JSON' }), 400, origin); }
+    catch { return corsResponse(JSON.stringify({ error: 'Invalid JSON' }), 400, origin, allowedOrigin); }
 
     const { memberUid, newPassword } = body;
     if (!memberUid || typeof newPassword !== 'string' || newPassword.length < 6) {
-        return corsResponse(JSON.stringify({ error: 'memberUid and newPassword (min 6) required' }), 400, origin);
+        return corsResponse(JSON.stringify({ error: 'memberUid and newPassword (min 6) required' }), 400, origin, allowedOrigin);
     }
 
     // 3. Verify ID token → get caller UID
     const lookupRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
     );
-    if (!lookupRes.ok) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin);
+    if (!lookupRes.ok) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
     const lookupData = await lookupRes.json();
     const callerUid = lookupData.users?.[0]?.localId;
-    if (!callerUid) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin);
+    if (!callerUid) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
 
     // 4. Get service account access token
     let accessToken;
     try { accessToken = await getServiceAccountToken(env); }
     catch (e) {
         console.error('SA token error:', e.message);
-        return corsResponse(JSON.stringify({ error: 'Server config error — secrets not set' }), 500, origin);
+        return corsResponse(JSON.stringify({ error: 'Server config error — secrets not set' }), 500, origin, allowedOrigin);
     }
 
     // 5. Verify caller is a manager
-    const callerDoc = await fetchFirestoreDoc(accessToken, 'users', callerUid);
+    const callerDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'users', callerUid);
     if (callerDoc?.role !== 'manager') {
-        return corsResponse(JSON.stringify({ error: 'Permission denied: not a manager' }), 403, origin);
+        return corsResponse(JSON.stringify({ error: 'Permission denied: not a manager' }), 403, origin, allowedOrigin);
     }
 
     // 6. Verify target belongs to same family and is not a manager
-    const memberDoc = await fetchFirestoreDoc(accessToken, 'users', memberUid);
+    const memberDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'users', memberUid);
     if (!memberDoc || memberDoc.familyId !== callerDoc.familyId || memberDoc.role === 'manager') {
-        return corsResponse(JSON.stringify({ error: 'Permission denied: invalid target' }), 403, origin);
+        return corsResponse(JSON.stringify({ error: 'Permission denied: invalid target' }), 403, origin, allowedOrigin);
     }
 
     // 7. Reset password via Identity Toolkit Admin API
     const updateRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/accounts:update`,
+        `https://identitytoolkit.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/accounts:update`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
@@ -137,17 +137,17 @@ async function handleResetPassword(request, env, origin) {
     if (!updateRes.ok) {
         const err = await updateRes.text();
         console.error('Identity Toolkit error:', err);
-        return corsResponse(JSON.stringify({ error: 'Failed to update password' }), 500, origin);
+        return corsResponse(JSON.stringify({ error: 'Failed to update password' }), 500, origin, allowedOrigin);
     }
 
     console.log(`→ password reset OK for ${memberUid} by ${callerUid}`);
-    return corsResponse(JSON.stringify({ success: true }), 200, origin);
+    return corsResponse(JSON.stringify({ success: true }), 200, origin, allowedOrigin);
 }
 
 // ─── Firestore REST helper ────────────────────────────────────────────────────
 
-async function fetchFirestoreDoc(accessToken, collection, docId) {
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${collection}/${docId}`;
+async function fetchFirestoreDoc(accessToken, projectId, collection, docId) {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}/${docId}`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
     if (!res.ok) return null;
     const data = await res.json();
@@ -210,8 +210,8 @@ async function getServiceAccountToken(env) {
 
 // ─── CORS helper ──────────────────────────────────────────────────────────────
 
-function corsResponse(body, status, origin, contentType = 'application/json') {
-    const allowed = origin === ALLOWED_ORIGIN
+function corsResponse(body, status, origin, allowedOrigin, contentType = 'application/json') {
+    const allowed = origin === allowedOrigin
         || origin === 'http://localhost'
         || origin.startsWith('http://localhost:')
         || origin.startsWith('http://127.0.0.1');
@@ -222,7 +222,7 @@ function corsResponse(body, status, origin, contentType = 'application/json') {
         status,
         headers: {
             'Content-Type': contentType,
-            'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGIN,
+            'Access-Control-Allow-Origin': allowed ? origin : allowedOrigin,
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
