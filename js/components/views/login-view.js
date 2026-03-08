@@ -2,9 +2,9 @@
 // Login View — dual login: manager (email) and kid (username)
 // ============================================================
 
-import { esc } from '../utils/dom-helpers.js';
-import { emit } from '../event-bus.js';
-import * as authService from '../services/auth-service.js';
+import { esc } from '../../utils/dom-helpers.js';
+import { emit } from '../../event-bus.js';
+import * as authService from '../../services/auth-service.js';
 
 let container = null;
 let activeMode = 'kid'; // 'kid' or 'manager'

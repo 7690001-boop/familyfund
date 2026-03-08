@@ -3,7 +3,7 @@
 // Listens to event-bus 'toast' events
 // ============================================================
 
-import { on } from '../event-bus.js';
+import { on } from '../../event-bus.js';
 
 let container = null;
 

@@ -2,9 +2,9 @@
 // Goal List — savings goals section
 // ============================================================
 
-import { formatCurrency, formatDate } from '../utils/format.js';
-import { esc } from '../utils/dom-helpers.js';
-import * as store from '../store.js';
+import { formatCurrency, formatDate } from '../../utils/format.js';
+import { esc } from '../../utils/dom-helpers.js';
+import * as store from '../../store.js';
 
 export function render(container, goals, currentPortfolioValue, options = {}) {
     const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete } = options;

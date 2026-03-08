@@ -2,8 +2,8 @@
 // Matching Section — S&P 500 matching program display
 // ============================================================
 
-import { formatCurrency, formatDate } from '../utils/format.js';
-import * as store from '../store.js';
+import { formatCurrency, formatDate } from '../../utils/format.js';
+import * as store from '../../store.js';
 
 export function render(container, matching, family) {
     if (!family?.sp500_ticker) {

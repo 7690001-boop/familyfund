@@ -3,7 +3,7 @@
 // Listens to event-bus 'modal:open' and 'modal:close' events
 // ============================================================
 
-import { on, emit } from '../event-bus.js';
+import { on, emit } from '../../event-bus.js';
 
 let overlay = null;
 let content = null;

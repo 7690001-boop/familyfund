@@ -2,11 +2,11 @@
 // Family View — family overview: comparison table + aggregate
 // ============================================================
 
-import * as store from '../store.js';
-import { calcInvestment, kidInvestments, computeSummary, computeMatching } from '../utils/compute.js';
-import { formatCurrency, formatPct } from '../utils/format.js';
-import { esc, cellGainLossClass } from '../utils/dom-helpers.js';
-import * as summaryCards from './summary-cards.js';
+import * as store from '../../store.js';
+import { calcInvestment, kidInvestments, computeSummary, computeMatching } from '../../utils/compute.js';
+import { formatCurrency, formatPct } from '../../utils/format.js';
+import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
+import * as summaryCards from '../ui/summary-cards.js';
 
 let _unsubs = [];
 let _container = null;

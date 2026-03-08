@@ -111,7 +111,7 @@ export function computeSummary(investments) {
 export function aggregateByTicker(investments) {
     const groups = new Map();
     investments.forEach(inv => {
-        const key = inv.ticker ? inv.ticker.toUpperCase() : `__name__${inv.asset_name || ''}`;
+        const key = inv.ticker ? normalizeTicker(inv.ticker) : `__name__${inv.asset_name || ''}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(inv);
     });
@@ -149,6 +149,7 @@ export function aggregateByTicker(investments) {
         return {
             ticker: first.ticker,
             asset_name: first.nickname || first.asset_name,
+            kid: first.kid,
             currency,
             purchaseCount: group.length,
             totalShares,
