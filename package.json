@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "firebase": "^12.9.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9",
+    "wrangler": "^4.71.0"
+  }
+}

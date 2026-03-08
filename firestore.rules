@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: get the user's role in a family
+    function getUserRole(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role;
+    }
+
+    function isManager(familyId) {
+      return getUserRole(familyId) == 'manager';
+    }
+
+    function isFamilyMember(familyId) {
+      return exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    // Username → familyId lookup — publicly readable so kids can log in without family code
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // User profile lookup — each user can read/write their own doc
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /families/{familyId} {
+      // Any authenticated family member can read the family doc
+      allow read: if request.auth != null && isFamilyMember(familyId);
+      // Anyone can create a family (manager creates on setup)
+      allow create: if request.auth != null;
+      // Only manager can update/delete
+      allow update, delete: if request.auth != null && isManager(familyId);
+
+      // Members subcollection
+      match /members/{memberId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow write: if request.auth != null && isManager(familyId);
+        // Allow initial write when creating family (manager adds themselves)
+        allow create: if request.auth != null;
+      }
+
+      // Investments subcollection — only manager can write
+      match /investments/{investmentId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create, update, delete: if request.auth != null && isManager(familyId);
+      }
+
+      // Goals subcollection — members can manage their own goals
+      match /goals/{goalId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        // Manager can do anything
+        allow create, update, delete: if request.auth != null && isManager(familyId);
+        // Members can create goals for themselves
+        allow create: if request.auth != null && isFamilyMember(familyId)
+                      && request.resource.data.kid_uid == request.auth.uid;
+        // Members can update/delete their own goals
+        allow update, delete: if request.auth != null && isFamilyMember(familyId)
+                              && resource.data.kid_uid == request.auth.uid;
+      }
+
+      // Prices cache — any member can read/write
+      match /prices/{doc} {
+        allow read, write: if request.auth != null && isFamilyMember(familyId);
+      }
+    }
+  }
+}

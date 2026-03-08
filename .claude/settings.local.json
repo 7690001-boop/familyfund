@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(ls:*)",
+      "Bash(done)",
+      "Bash(npx firebase deploy:*)",
+      "WebFetch(domain:market.tase.co.il)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "Bash(wrangler deploy:*)",
+      "Bash(npx wrangler whoami:*)",
+      "Bash(npx wrangler subdomain:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(npx wrangler deployments list:*)",
+      "Bash(npm test:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(node -e \"const k=require\\(''./savings-16206-firebase-adminsdk-fbsvc-2eeb6942b1.json''\\); process.stdout.write\\(k.client_email\\)\")",
+      "Bash(npx vitest run:*)",
+      "Bash(node -e:*)"
+    ]
+  }
+}
