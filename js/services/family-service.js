@@ -2,7 +2,7 @@
 // Family Service — Firestore CRUD for family config + members
 // ============================================================
 
-import { FIREBASE_CDN, firebaseConfig } from '../config.js';
+import { FIREBASE_CDN, firebaseConfig, YAHOO_PROXY } from '../config.js';
 import { getAppDb, getApp } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
@@ -159,7 +159,7 @@ export async function resetMemberPassword(memberUid, newPassword) {
     const { getAppAuth } = await import('../firebase-init.js');
     const idToken = await getAppAuth().currentUser.getIdToken();
 
-    const res = await fetch('https://yahoo-proxy.7690001.workers.dev/reset-password', {
+    const res = await fetch(`${YAHOO_PROXY}/reset-password`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

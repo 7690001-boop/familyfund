@@ -2,5 +2,12 @@ name = "yahoo-proxy"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
+# All secrets set via: wrangler secret put NAME
+#   FIREBASE_API_KEY
+#   FIREBASE_PROJECT_ID
+#   ALLOWED_ORIGIN
+#   FIREBASE_SA_EMAIL
+#   FIREBASE_SA_PRIVATE_KEY
+
 [observability]
 enabled = true
