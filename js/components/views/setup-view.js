@@ -3,11 +3,11 @@
 // Shown when user is authenticated but has no familyId
 // ============================================================
 
-import { esc } from '../utils/dom-helpers.js';
-import { emit } from '../event-bus.js';
-import * as store from '../store.js';
-import * as authService from '../services/auth-service.js';
-import * as familyService from '../services/family-service.js';
+import { esc } from '../../utils/dom-helpers.js';
+import { emit } from '../../event-bus.js';
+import * as store from '../../store.js';
+import * as authService from '../../services/auth-service.js';
+import * as familyService from '../../services/family-service.js';
 
 let container = null;
 

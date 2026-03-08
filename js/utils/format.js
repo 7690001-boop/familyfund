@@ -47,5 +47,5 @@ export function daysBetween(dateStr) {
     if (!dateStr) return 0;
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 0;
-    return Math.floor((new Date() - d) / 86400000);
+    return Math.max(0, Math.floor((new Date() - d) / 86400000));
 }

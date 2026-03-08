@@ -1,123 +1,31 @@
 // ============================================================
-// Kid View — per-kid dashboard: summary + assets + goals + matching
+// Investment Modal — add/edit investment with ticker autocomplete,
+// historical price lookup, and FX section for foreign securities.
 // ============================================================
 
-import * as store from '../store.js';
-import { can } from '../permissions.js';
-import { kidInvestments, kidGoals, computeSummary, computeMatching } from '../utils/compute.js';
-import { esc, cellGainLossClass } from '../utils/dom-helpers.js';
-import { formatCurrency, formatPct, toDateStr, currencySymbol } from '../utils/format.js';
-import { emit } from '../event-bus.js';
-import * as summaryCards from './summary-cards.js';
-import * as assetTable from './asset-table.js';
-import * as goalList from './goal-list.js';
-import * as matchingSection from './matching-section.js';
-import { open as openModal, close as closeModal } from './modal.js';
+import * as store from '../../store.js';
+import { esc } from '../../utils/dom-helpers.js';
+import { toDateStr, currencySymbol } from '../../utils/format.js';
+import { emit } from '../../event-bus.js';
+import { open as openModal, close as closeModal } from '../ui/modal.js';
 
-let _unsubs = [];
-let _container = null;
-let _kidName = null;
-
-export function mount(container, kidName) {
-    unmount();
-    _container = container;
-    _kidName = kidName;
-    renderView();
-
-    _unsubs.push(
-        store.subscribe('investments', () => renderView()),
-        store.subscribe('goals', () => renderView()),
-        store.subscribe('exchangeRates', () => renderView()),
-    );
-}
-
-export function unmount() {
-    _unsubs.forEach(fn => fn());
-    _unsubs = [];
-    _container = null;
-    _kidName = null;
-}
-
-function renderView() {
-    if (!_container || !_kidName) return;
-
-    const user = store.get('user');
-    const family = store.get('family') || {};
-    const allInvestments = (store.get('investments') || []);
-    const allGoals = (store.get('goals') || []);
-
-    const investments = kidInvestments(allInvestments, _kidName);
-    const goals = kidGoals(allGoals, _kidName);
-    const summary = computeSummary(investments);
-    const matching = computeMatching(investments, family);
-
-    _container.innerHTML = `
-        <section class="summary-cards" data-slot="summary"></section>
-        <section class="section" data-slot="assets"></section>
-        <section class="section" data-slot="goals"></section>
-        <section class="section" data-slot="matching"></section>
-    `;
-
-    summaryCards.render(
-        _container.querySelector('[data-slot="summary"]'),
-        summary, family
-    );
-
-    assetTable.render(
-        _container.querySelector('[data-slot="assets"]'),
-        investments,
-        {
-            canEdit: can(user, 'investment:edit'),
-            canAdd: can(user, 'investment:create'),
-            onAdd: () => showInvestmentModal(_kidName),
-            onEdit: (id) => {
-                const inv = allInvestments.find(i => i.id === id);
-                if (inv) showInvestmentModal(_kidName, inv);
-            },
-            onDelete: (id) => deleteInvestment(id),
-        }
-    );
-
-    goalList.render(
-        _container.querySelector('[data-slot="goals"]'),
-        goals, summary.totalCurrent,
-        {
-            canEdit: can(user, 'goal:edit', { kidName: _kidName }),
-            canAdd: can(user, 'goal:create', { kidName: _kidName }),
-            onAdd: () => showGoalModal(_kidName),
-            onEdit: (id) => {
-                const g = allGoals.find(g2 => g2.id === id);
-                if (g) showGoalModal(_kidName, g);
-            },
-            onDelete: (id) => deleteGoal(id),
-        }
-    );
-
-    matchingSection.render(
-        _container.querySelector('[data-slot="matching"]'),
-        matching, family
-    );
-}
-
-// --- Investment modal ---
-
+// Modal-scoped state (reset on every open)
 let _historicalData = null;
-let _tickerCurrency = null;         // currency code of the selected ticker (e.g. 'USD')
-let _exchangeRateAtPurchase = null; // ILS per 1 native unit, at purchase date
-let _lastAutocompletedTicker = null; // tracks which ticker was validated via autocomplete
+let _tickerCurrency = null;
+let _exchangeRateAtPurchase = null;
+let _lastAutocompletedTicker = null;
 
-function showInvestmentModal(kid, existing) {
+export function showInvestmentModal(kid, existing) {
     const isEdit = !!existing;
     const title = isEdit ? 'עריכת השקעה' : 'הוספת השקעה';
     const inv = existing || {};
     const family = store.get('family') || {};
     const sym = family.currency_symbol || '₪';
 
-    // Reset modal-scoped state
     _tickerCurrency = inv.currency || null;
     _exchangeRateAtPurchase = inv.exchange_rate_at_purchase || null;
     _historicalData = null;
-    _lastAutocompletedTicker = inv.ticker || null; // pre-set so blur doesn't re-validate for edits
+    _lastAutocompletedTicker = inv.ticker || null;
 
     const html = `
         <h2>${title}</h2>
@@ -209,7 +117,6 @@ function showInvestmentModal(kid, existing) {
         const amountRaw = modal.querySelector('#inv-amount').value;
         const currentPrice = modal.querySelector('#inv-price').value;
         const rateInput = modal.querySelector('#inv-exchange-rate');
-        // Prefer the current input value over the cached rate (Fix #3)
         const exchangeRate = rateInput && rateInput.value
             ? parseFloat(rateInput.value)
             : (_exchangeRateAtPurchase || null);
@@ -219,7 +126,6 @@ function showInvestmentModal(kid, existing) {
         let finalShares = sharesRaw ? parseFloat(sharesRaw) : null;
         let finalAmount = amountRaw ? parseFloat(amountRaw) : null;
 
-        // Require at least one of shares or amount
         if (!finalShares && !finalAmount) {
             modal.querySelector('#inv-amount').focus();
             return;
@@ -228,7 +134,6 @@ function showInvestmentModal(kid, existing) {
         const currency = _tickerCurrency || 'ILS';
         const rate = exchangeRate || 1;
 
-        // Auto-derive amount from shares × purchase price if amount is missing
         if (!finalAmount && finalShares && _historicalData) {
             const activeBtn = modal.querySelector('#price-type-bar .price-type-btn.active');
             const pType = activeBtn?.dataset.type || 'close';
@@ -241,10 +146,10 @@ function showInvestmentModal(kid, existing) {
         }
 
         const record = {
-            kid: kid,
+            kid,
             asset_name: assetName,
             nickname: nickname || null,
-            ticker: ticker,
+            ticker,
             purchase_date: purchaseDate || null,
             shares: finalShares,
             amount_invested: finalAmount,
@@ -255,7 +160,7 @@ function showInvestmentModal(kid, existing) {
 
         try {
             const user = store.get('user');
-            const { add, update } = await import('../services/investment-service.js');
+            const { add, update } = await import('../../services/investment-service.js');
             if (isEdit) {
                 await update(user.familyId, existing.id, record);
             } else {
@@ -277,20 +182,28 @@ function showInvestmentModal(kid, existing) {
 
     modal.querySelector('#inv-ticker').focus();
 
-    // If editing an existing non-ILS investment, show the FX section immediately
     if (isEdit && inv.currency && inv.currency !== 'ILS') {
         showFxSection(modal, inv.currency, inv.exchange_rate_at_purchase);
     }
 
-    // Auto-fetch historical price in edit mode so "calculate units/amount" buttons are visible.
-    // In edit mode the date field is pre-filled but never fires a 'change' event, so we trigger manually.
-    // skipRateUpdate=true when a rate is already stored so we don't overwrite it.
     if (inv.ticker && inv.purchase_date) {
         triggerPurchasePriceLookup(modal, { skipRateUpdate: !!inv.exchange_rate_at_purchase });
     }
 }
 
-// --- Ticker autocomplete ---
+export async function deleteInvestment(id) {
+    try {
+        const user = store.get('user');
+        const { remove } = await import('../../services/investment-service.js');
+        await remove(user.familyId, id);
+        emit('toast', { message: 'השקעה נמחקה', type: 'success' });
+    } catch (e) {
+        emit('toast', { message: 'שגיאה במחיקת השקעה', type: 'error' });
+    }
+}
+
+// ─── Ticker autocomplete ──────────────────────────────────────
+
 function setupTickerAutocomplete(modal) {
     const input = modal.querySelector('#inv-ticker');
     const btn = modal.querySelector('#ticker-search-btn');
@@ -299,18 +212,12 @@ function setupTickerAutocomplete(modal) {
 
     async function doSearch() {
         const q = input.value.trim();
-        if (q.length < 1) {
-            resultsEl.hidden = true;
-            return;
-        }
+        if (q.length < 1) { resultsEl.hidden = true; return; }
         btn.disabled = true;
-        const { searchTickers } = await import('../services/price-service.js');
+        const { searchTickers } = await import('../../services/price-service.js');
         const results = await searchTickers(q);
         btn.disabled = false;
-        if (results.length === 0) {
-            resultsEl.hidden = true;
-            return;
-        }
+        if (results.length === 0) { resultsEl.hidden = true; return; }
         activeIndex = -1;
         resultsEl.innerHTML = results.map((r, i) => `
             <div class="ticker-result-item" data-index="${i}" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}">
@@ -333,11 +240,7 @@ function setupTickerAutocomplete(modal) {
     btn.addEventListener('click', doSearch);
 
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && resultsEl.hidden) {
-            e.preventDefault();
-            doSearch();
-            return;
-        }
+        if (e.key === 'Enter' && resultsEl.hidden) { e.preventDefault(); doSearch(); return; }
         if (resultsEl.hidden) return;
         const items = resultsEl.querySelectorAll('.ticker-result-item');
         if (e.key === 'ArrowDown') {
@@ -361,7 +264,6 @@ function setupTickerAutocomplete(modal) {
     input.addEventListener('blur', () => {
         setTimeout(async () => {
             resultsEl.hidden = true;
-            // If ticker was typed manually (not via autocomplete), detect its currency now
             const ticker = input.value.trim();
             if (ticker && ticker.toUpperCase() !== (_lastAutocompletedTicker || '').toUpperCase()) {
                 await detectTickerCurrency(modal, ticker);
@@ -377,24 +279,20 @@ function updateActive(items, index) {
 async function selectResult(modal, symbol, name) {
     modal.querySelector('#inv-ticker').value = symbol;
     modal.querySelector('#inv-asset').value = name || symbol;
-    _lastAutocompletedTicker = symbol; // mark as validated via autocomplete
+    _lastAutocompletedTicker = symbol;
 
-    // Fetch current price and detect currency
     const priceInput = modal.querySelector('#inv-price');
     try {
-        const { validateTicker } = await import('../services/price-service.js');
+        const { validateTicker } = await import('../../services/price-service.js');
         const result = await validateTicker(symbol);
         if (result.valid) {
-            if (!priceInput.value && result.price != null) {
-                priceInput.value = result.price;
-            }
+            if (!priceInput.value && result.price != null) priceInput.value = result.price;
             _tickerCurrency = result.currency || 'ILS';
         }
     } catch { /* ignore */ }
 
-    // Show / hide the FX section based on currency
     if (_tickerCurrency && _tickerCurrency !== 'ILS') {
-        const { fetchExchangeRate } = await import('../services/price-service.js');
+        const { fetchExchangeRate } = await import('../../services/price-service.js');
         const rate = await fetchExchangeRate(_tickerCurrency);
         if (rate) _exchangeRateAtPurchase = rate;
         showFxSection(modal, _tickerCurrency, rate);
@@ -405,21 +303,17 @@ async function selectResult(modal, symbol, name) {
     triggerPurchasePriceLookup(modal);
 }
 
-// Validates a manually typed ticker and sets currency / FX section accordingly
 async function detectTickerCurrency(modal, ticker) {
     try {
-        const { validateTicker, fetchExchangeRate } = await import('../services/price-service.js');
+        const { validateTicker, fetchExchangeRate } = await import('../../services/price-service.js');
         const result = await validateTicker(ticker);
         if (!result.valid) return;
 
         _tickerCurrency = result.currency || 'ILS';
         _lastAutocompletedTicker = ticker;
 
-        // Fill current price if empty
         const priceInput = modal.querySelector('#inv-price');
-        if (priceInput && !priceInput.value && result.price != null) {
-            priceInput.value = result.price;
-        }
+        if (priceInput && !priceInput.value && result.price != null) priceInput.value = result.price;
 
         if (_tickerCurrency !== 'ILS') {
             const rate = await fetchExchangeRate(_tickerCurrency);
@@ -431,22 +325,17 @@ async function detectTickerCurrency(modal, ticker) {
     } catch { /* ignore */ }
 }
 
-// --- FX section (ILS → native conversion) ---
+// ─── FX section ───────────────────────────────────────────────
 
 function showFxSection(modal, currency, rate) {
     const section = modal.querySelector('#fx-section');
     if (!section) return;
     section.hidden = false;
-
     const pairLabel = modal.querySelector('#fx-pair-label');
     if (pairLabel) pairLabel.textContent = currency + '/ILS';
-
     const rateInput = modal.querySelector('#inv-exchange-rate');
     if (rateInput && rate) rateInput.value = rate;
-
-    // Show current live exchange rate (from store) for comparison
     updateCurrentRateDisplay(modal, currency);
-
     updateFxEquiv(modal);
 }
 
@@ -468,9 +357,7 @@ function setupFxSection(modal) {
     const rateInput = modal.querySelector('#inv-exchange-rate');
     const refreshBtn = modal.querySelector('#fx-refresh-btn');
 
-    if (amountInput) {
-        amountInput.addEventListener('input', () => updateFxEquiv(modal));
-    }
+    if (amountInput) amountInput.addEventListener('input', () => updateFxEquiv(modal));
     if (rateInput) {
         rateInput.addEventListener('input', () => {
             const rate = parseFloat(rateInput.value);
@@ -483,7 +370,7 @@ function setupFxSection(modal) {
             if (!_tickerCurrency || _tickerCurrency === 'ILS') return;
             refreshBtn.disabled = true;
             try {
-                const { fetchExchangeRate } = await import('../services/price-service.js');
+                const { fetchExchangeRate } = await import('../../services/price-service.js');
                 const rate = await fetchExchangeRate(_tickerCurrency);
                 if (rate && rateInput) {
                     rateInput.value = rate;
@@ -501,12 +388,10 @@ function setupFxSection(modal) {
 function updateFxEquiv(modal) {
     const equivEl = modal.querySelector('#fx-equiv-display');
     if (!equivEl) return;
-
     const ilsAmount = parseFloat(modal.querySelector('#inv-amount')?.value) || 0;
     const rate = parseFloat(modal.querySelector('#inv-exchange-rate')?.value) || 0;
     const currency = _tickerCurrency || 'ILS';
     const sym = currencySymbol(currency);
-
     if (ilsAmount > 0 && rate > 0) {
         const nativeAmount = ilsAmount / rate;
         equivEl.textContent = `= ${sym}${nativeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -515,7 +400,7 @@ function updateFxEquiv(modal) {
     }
 }
 
-// --- Purchase price lookup by date ---
+// ─── Purchase price lookup ────────────────────────────────────
 
 function setupPurchasePriceLookup(modal) {
     const dateInput = modal.querySelector('#inv-date');
@@ -526,13 +411,9 @@ function setupPurchasePriceLookup(modal) {
     priceBar.addEventListener('click', (e) => {
         const btn = e.target.closest('.price-type-btn');
         if (!btn || !_historicalData) return;
-
         priceBar.querySelectorAll('.price-type-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-
-        const type = btn.dataset.type;
-        const price = _historicalData[type];
-        updatePurchasePriceDisplay(modal, price, type);
+        updatePurchasePriceDisplay(modal, _historicalData[btn.dataset.type], btn.dataset.type);
     });
 }
 
@@ -543,38 +424,26 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
     const section = modal.querySelector('#purchase-price-section');
     const display = modal.querySelector('#purchase-price-display');
 
-    if (!ticker || !dateStr) {
-        section.hidden = true;
-        _historicalData = null;
-        return;
-    }
+    if (!ticker || !dateStr) { section.hidden = true; _historicalData = null; return; }
 
     section.hidden = false;
     display.innerHTML = '<span class="price-loading">טוען מחיר...</span>';
     _historicalData = null;
 
     try {
-        const { fetchHistoricalPrice, fetchHistoricalExchangeRate } = await import('../services/price-service.js');
+        const { fetchHistoricalPrice, fetchHistoricalExchangeRate } = await import('../../services/price-service.js');
 
-        // Fetch both historical price and (if needed) historical exchange rate in parallel
         const promises = [fetchHistoricalPrice(ticker, dateStr)];
         const currency = _tickerCurrency || 'ILS';
-        if (currency !== 'ILS') {
-            promises.push(fetchHistoricalExchangeRate(currency, dateStr));
-        }
+        if (currency !== 'ILS') promises.push(fetchHistoricalExchangeRate(currency, dateStr));
 
         const [data, historicalRate] = await Promise.all(promises);
         _historicalData = data;
 
-        // Use historical rate if available. In edit mode with a stored rate,
-        // skipRateUpdate=true so we don't overwrite the original exchange_rate_at_purchase.
         if (historicalRate && historicalRate > 0 && !skipRateUpdate) {
             _exchangeRateAtPurchase = historicalRate;
             const rateInput = modal.querySelector('#inv-exchange-rate');
-            if (rateInput) {
-                rateInput.value = historicalRate;
-                updateFxEquiv(modal);
-            }
+            if (rateInput) { rateInput.value = historicalRate; updateFxEquiv(modal); }
         }
 
         const activeBtn = modal.querySelector('#price-type-bar .price-type-btn.active');
@@ -592,153 +461,32 @@ function updatePurchasePriceDisplay(modal, price, type) {
     const sym = currencySymbol(currency);
 
     if (price != null) {
-        const priceDisplay = `${sym}${price}`;
         display.innerHTML = `
-            <span class="price-value" dir="ltr">${priceDisplay}</span>
+            <span class="price-value" dir="ltr">${sym}${price}</span>
             <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">חשב יחידות</button>
             <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">חשב סכום</button>
         `;
 
-        // "Calculate units" from ILS amount
         display.querySelector('#use-purchase-price').addEventListener('click', () => {
             const sharesInput = modal.querySelector('#inv-shares');
             const amountInput = modal.querySelector('#inv-amount');
             const ilsAmount = parseFloat(amountInput.value);
-
             if (!ilsAmount || ilsAmount <= 0 || !price || price <= 0) return;
-
-            // Fix #3: prefer live input value over cached rate
             const rate = parseFloat(modal.querySelector('#inv-exchange-rate')?.value) || _exchangeRateAtPurchase || 1;
-
-            let units;
-            if (currency === 'ILS') {
-                units = ilsAmount / price;
-            } else {
-                if (rate <= 0) return;
-                units = (ilsAmount / rate) / price;
-            }
-            sharesInput.value = +units.toFixed(6);
+            const units = currency === 'ILS' ? ilsAmount / price : (rate <= 0 ? 0 : (ilsAmount / rate) / price);
+            if (units > 0) sharesInput.value = +units.toFixed(6);
         });
 
-        // "Calculate ILS amount" from units
         display.querySelector('#calc-amount-from-shares').addEventListener('click', () => {
             const sharesInput = modal.querySelector('#inv-shares');
             const amountInput = modal.querySelector('#inv-amount');
             const units = parseFloat(sharesInput.value);
-
             if (!units || units <= 0 || !price || price <= 0) return;
-
             const rate = parseFloat(modal.querySelector('#inv-exchange-rate')?.value) || _exchangeRateAtPurchase || 1;
-
-            let ilsAmount;
-            if (currency === 'ILS') {
-                ilsAmount = units * price;
-            } else {
-                if (rate <= 0) return;
-                ilsAmount = units * price * rate;
-            }
-            amountInput.value = +ilsAmount.toFixed(2);
-            updateFxEquiv(modal);
+            const ilsAmount = currency === 'ILS' ? units * price : (rate <= 0 ? 0 : units * price * rate);
+            if (ilsAmount > 0) { amountInput.value = +ilsAmount.toFixed(2); updateFxEquiv(modal); }
         });
     } else {
         display.innerHTML = '<span class="price-error">אין נתון ל' + (labels[type] || type) + '</span>';
-    }
-}
-
-async function deleteInvestment(id) {
-    try {
-        const user = store.get('user');
-        const { remove } = await import('../services/investment-service.js');
-        await remove(user.familyId, id);
-        emit('toast', { message: 'השקעה נמחקה', type: 'success' });
-    } catch (e) {
-        emit('toast', { message: 'שגיאה במחיקת השקעה', type: 'error' });
-    }
-}
-
-// --- Goal modal ---
-function showGoalModal(kid, existing) {
-    const isEdit = !!existing;
-    const title = isEdit ? 'עריכת יעד' : 'הוספת יעד';
-    const g = existing || {};
-    const family = store.get('family') || {};
-    const sym = family.currency_symbol || '₪';
-    const user = store.get('user');
-
-    const html = `
-        <h2>${title}</h2>
-        <div class="form-group">
-            <label for="goal-name">שם היעד</label>
-            <input type="text" id="goal-name" placeholder="למשל: אופניים חדשים" value="${esc(g.goal_name || '')}">
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="goal-target">סכום יעד (${sym})</label>
-                <input type="number" id="goal-target" step="any" min="0" value="${g.target_amount || ''}">
-            </div>
-            <div class="form-group">
-                <label for="goal-deadline">תאריך יעד (אופציונלי)</label>
-                <input type="date" id="goal-deadline" value="${toDateStr(g.deadline)}">
-            </div>
-        </div>
-        <div class="modal-actions">
-            ${isEdit ? '<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">מחק</button>' : ''}
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-primary" id="modal-save">שמור</button>
-        </div>
-    `;
-
-    openModal(html);
-
-    const modal = document.getElementById('modal-content');
-    modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
-    modal.querySelector('#modal-save').addEventListener('click', async () => {
-        const goalName = modal.querySelector('#goal-name').value.trim();
-        const targetAmount = modal.querySelector('#goal-target').value;
-        const deadline = modal.querySelector('#goal-deadline').value;
-
-        if (!goalName) { modal.querySelector('#goal-name').focus(); return; }
-        if (!targetAmount) { modal.querySelector('#goal-target').focus(); return; }
-
-        const record = {
-            kid: kid,
-            kid_uid: user.uid,
-            goal_name: goalName,
-            target_amount: parseFloat(targetAmount),
-            deadline: deadline || null,
-        };
-
-        try {
-            const { add, update } = await import('../services/goal-service.js');
-            if (isEdit) {
-                await update(user.familyId, existing.id, record);
-            } else {
-                await add(user.familyId, record);
-            }
-            closeModal();
-            emit('toast', { message: isEdit ? 'יעד עודכן' : 'יעד נוסף', type: 'success' });
-        } catch (e) {
-            emit('toast', { message: 'שגיאה בשמירת יעד', type: 'error' });
-        }
-    });
-
-    if (isEdit) {
-        modal.querySelector('#modal-delete').addEventListener('click', () => {
-            deleteGoal(existing.id);
-            closeModal();
-        });
-    }
-
-    modal.querySelector('#goal-name').focus();
-}
-
-async function deleteGoal(id) {
-    try {
-        const user = store.get('user');
-        const { remove } = await import('../services/goal-service.js');
-        await remove(user.familyId, id);
-        emit('toast', { message: 'יעד נמחק', type: 'success' });
-    } catch (e) {
-        emit('toast', { message: 'שגיאה במחיקת יעד', type: 'error' });
     }
 }

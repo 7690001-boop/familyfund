@@ -5,8 +5,8 @@
 import { init as initFirebase } from './firebase-init.js';
 import { init as initRouter } from './router.js';
 import { init as initAuth } from './services/auth-service.js';
-import { init as initToast } from './components/toast.js';
-import { init as initModal } from './components/modal.js';
+import { init as initToast } from './components/ui/toast.js';
+import { init as initModal } from './components/ui/modal.js';
 
 async function boot() {
     try {

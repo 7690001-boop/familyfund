@@ -38,19 +38,19 @@ async function navigate(viewName) {
 
     switch (viewName) {
         case 'login': {
-            const mod = await import('./components/login-view.js');
+            const mod = await import('./components/views/login-view.js');
             mod.mount(container);
             currentView = mod;
             break;
         }
         case 'setup': {
-            const mod = await import('./components/setup-view.js');
+            const mod = await import('./components/views/setup-view.js');
             mod.mount(container);
             currentView = mod;
             break;
         }
         case 'dashboard': {
-            const mod = await import('./components/dashboard-shell.js');
+            const mod = await import('./components/views/dashboard-shell.js');
             mod.mount(container);
             currentView = mod;
             break;

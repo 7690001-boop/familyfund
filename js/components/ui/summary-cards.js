@@ -2,8 +2,8 @@
 // Summary Cards — reusable summary card row
 // ============================================================
 
-import { formatCurrency, formatPct } from '../utils/format.js';
-import { gainLossClass } from '../utils/dom-helpers.js';
+import { formatCurrency, formatPct } from '../../utils/format.js';
+import { gainLossClass } from '../../utils/dom-helpers.js';
 
 export function render(container, summary, family, labelPrefix = '') {
     const sym = family?.currency_symbol || '₪';

@@ -2,11 +2,11 @@
 // Asset Table — investment table component
 // ============================================================
 
-import { formatCurrency, formatPct, formatDate, currencySymbol } from '../utils/format.js';
-import { esc, cellGainLossClass } from '../utils/dom-helpers.js';
-import { emit } from '../event-bus.js';
-import * as store from '../store.js';
-import { aggregateByTicker } from '../utils/compute.js';
+import { formatCurrency, formatPct, formatDate, currencySymbol } from '../../utils/format.js';
+import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
+import { emit } from '../../event-bus.js';
+import * as store from '../../store.js';
+import { aggregateByTicker } from '../../utils/compute.js';
 
 export function render(container, investments, options = {}) {
     const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete } = options;
@@ -252,7 +252,7 @@ export function render(container, investments, options = {}) {
     const fetchBtn = container.querySelector('.fetch-prices-btn');
     if (fetchBtn) {
         fetchBtn.addEventListener('click', async () => {
-            const { fetchPrices } = await import('../services/price-service.js');
+            const { fetchPrices } = await import('../../services/price-service.js');
             fetchPrices(false);
         });
     }
