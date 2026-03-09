@@ -9,9 +9,11 @@ import { kidInvestments, kidGoals, computeSummary, computeMatching } from '../..
 import * as summaryCards from '../ui/summary-cards.js';
 import * as assetTable from '../ui/asset-table.js';
 import * as goalList from '../ui/goal-list.js';
+import * as simulationSection from '../ui/simulation-section.js';
 import * as matchingSection from '../ui/matching-section.js';
 import { showInvestmentModal, deleteInvestment } from '../modals/investment-modal.js';
 import { showGoalModal, deleteGoal } from '../modals/goal-modal.js';
+import { showSimulationModal, deleteSimulation } from '../modals/simulation-modal.js';
 
 let _unsubs = [];
 let _container = null;
@@ -32,6 +34,7 @@ export function mount(container, kidName) {
     _unsubs.push(
         store.subscribe('investments', debouncedRender),
         store.subscribe('goals', debouncedRender),
+        store.subscribe('simulations', debouncedRender),
         store.subscribe('exchangeRates', debouncedRender),
     );
 }
@@ -52,8 +55,11 @@ function renderView() {
     const allInvestments = store.get('investments') || [];
     const allGoals = store.get('goals') || [];
 
+    const allSimulations = store.get('simulations') || [];
+
     const investments = kidInvestments(allInvestments, _kidName);
     const goals = kidGoals(allGoals, _kidName);
+    const simulations = allSimulations.filter(s => s.kid === _kidName);
     const summary = computeSummary(investments);
     const matching = computeMatching(investments, family);
 
@@ -61,6 +67,7 @@ function renderView() {
         <section class="summary-cards" data-slot="summary"></section>
         <section class="section" data-slot="assets"></section>
         <section class="section" data-slot="goals"></section>
+        <section class="section" data-slot="simulator"></section>
         <section class="section" data-slot="matching"></section>
     `;
 
@@ -96,6 +103,17 @@ function renderView() {
                 if (g) showGoalModal(_kidName, g);
             },
             onDelete: (id) => deleteGoal(id),
+        }
+    );
+
+    simulationSection.render(
+        _container.querySelector('[data-slot="simulator"]'),
+        simulations,
+        {
+            canAdd: can(user, 'simulation:create', { kidName: _kidName }),
+            canDelete: can(user, 'simulation:delete', { kidName: _kidName }),
+            onAdd: () => showSimulationModal(_kidName),
+            onDelete: (id) => deleteSimulation(id),
         }
     );
 

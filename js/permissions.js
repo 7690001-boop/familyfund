@@ -35,6 +35,16 @@ const RULES = {
         return user.role === 'member' && user.kidName === ctx?.kidName;
     },
 
+    // Simulations — members can manage their own
+    'simulation:create':     (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
+    'simulation:delete':     (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
+
     // Members
     'member:create':         (user) => user.role === 'manager',
     'member:delete':         (user) => user.role === 'manager',

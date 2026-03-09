@@ -63,6 +63,16 @@ service cloud.firestore {
                               && resource.data.kid_uid == request.auth.uid;
       }
 
+      // Simulations subcollection — members can manage their own
+      match /simulations/{simulationId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create, update, delete: if request.auth != null && isManager(familyId);
+        allow create: if request.auth != null && isFamilyMember(familyId)
+                      && request.resource.data.kid_uid == request.auth.uid;
+        allow update, delete: if request.auth != null && isFamilyMember(familyId)
+                              && resource.data.kid_uid == request.auth.uid;
+      }
+
       // Prices cache — any member can read/write
       match /prices/{doc} {
         allow read, write: if request.auth != null && isFamilyMember(familyId);

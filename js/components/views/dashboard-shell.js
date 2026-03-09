@@ -10,6 +10,7 @@ import { esc } from '../../utils/dom-helpers.js';
 import * as familyService from '../../services/family-service.js';
 import * as investmentService from '../../services/investment-service.js';
 import * as goalService from '../../services/goal-service.js';
+import * as simulationService from '../../services/simulation-service.js';
 import * as priceService from '../../services/price-service.js';
 import { showAddMemberModal, showManageMembersModal } from '../modals/member-modals.js';
 import { showKidContextMenu } from '../modals/kid-modals.js';
@@ -38,6 +39,7 @@ export async function mount(container) {
     await familyService.listen(user.familyId);
     await investmentService.listen(user.familyId);
     await goalService.listen(user.familyId);
+    await simulationService.listen(user.familyId);
 
     await priceService.loadPriceCache(user.familyId);
     priceService.startAutoRefresh();
@@ -61,6 +63,7 @@ export function unmount() {
     familyService.stopListening();
     investmentService.stopListening();
     goalService.stopListening();
+    simulationService.stopListening();
     priceService.stopAutoRefresh();
     _container = null;
     _activeTab = null;

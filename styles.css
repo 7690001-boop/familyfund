@@ -1609,3 +1609,304 @@ body::after {
     background: rgba(253, 203, 110, 0.4);
     color: #2d3436;
 }
+
+/* ============================================================
+   Simulation Section — Investment Simulator
+   ============================================================ */
+
+.sim-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.sim-card {
+    background: var(--color-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.2rem;
+    animation: pop-in 0.3s ease-out;
+}
+
+.sim-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.sim-card-title {
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: block;
+}
+
+.sim-card-subtitle {
+    font-size: 0.85rem;
+    color: #636e72;
+    display: block;
+    margin-top: 0.15rem;
+}
+
+.sim-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.sim-inflation-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: #636e72;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sim-inflation-label input[type="checkbox"] {
+    accent-color: var(--color-accent2);
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+/* Summary cards row */
+.sim-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.sim-summary-card {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: var(--radius-sm);
+    padding: 0.8rem 1rem;
+    text-align: center;
+}
+
+.sim-summary-card.highlight {
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+    color: white;
+}
+
+.sim-summary-card.earnings-positive {
+    background: linear-gradient(135deg, #55efc4, #00b894);
+    color: white;
+}
+
+.sim-summary-card.earnings-negative {
+    background: linear-gradient(135deg, #fab1a0, #e17055);
+    color: white;
+}
+
+.sim-summary-label {
+    display: block;
+    font-size: 0.78rem;
+    opacity: 0.85;
+    margin-bottom: 0.3rem;
+}
+
+.sim-summary-value {
+    display: block;
+    font-weight: 700;
+    font-size: 1.15rem;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+.sim-wow-number {
+    font-size: 1.3rem;
+}
+
+/* Wow text */
+.sim-wow {
+    background: linear-gradient(135deg, #fdcb6e, #f39c12);
+    color: #2d3436;
+    border-radius: var(--radius-sm);
+    padding: 0.8rem 1.2rem;
+    font-weight: 700;
+    font-size: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+    animation: pop-in 0.5s ease-out;
+}
+
+/* Bar chart */
+.sim-chart-legend {
+    display: flex;
+    gap: 1.2rem;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.82rem;
+    color: #636e72;
+}
+
+.sim-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.sim-legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.sim-legend-dot.contrib {
+    background: linear-gradient(135deg, #74b9ff, #0984e3);
+}
+
+.sim-legend-dot.earnings {
+    background: linear-gradient(135deg, #55efc4, #00b894);
+}
+
+.sim-bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 160px;
+    padding: 0.5rem 0;
+    margin-bottom: 0.8rem;
+}
+
+.sim-bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    min-width: 0;
+}
+
+.sim-bar-stack {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    border-radius: 4px 4px 0 0;
+    overflow: hidden;
+}
+
+.sim-bar-contrib {
+    background: linear-gradient(180deg, #74b9ff, #0984e3);
+    min-height: 0;
+    transition: height 0.3s ease;
+}
+
+.sim-bar-earnings {
+    background: linear-gradient(180deg, #55efc4, #00b894);
+    min-height: 0;
+    transition: height 0.3s ease;
+}
+
+.sim-bar-label {
+    font-size: 0.6rem;
+    color: #b2bec3;
+    margin-top: 2px;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    direction: ltr;
+}
+
+/* Year-by-year table */
+.sim-table-toggle {
+    font-size: 0.82rem;
+    margin-bottom: 0.5rem;
+}
+
+.sim-table-wrap {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    max-height: 600px;
+}
+
+.sim-table-wrap.collapsed {
+    max-height: 0;
+}
+
+.sim-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.sim-table th {
+    background: #f8f9fa;
+    padding: 0.5rem 0.6rem;
+    text-align: start;
+    font-weight: 600;
+    border-bottom: 2px solid #dfe6e9;
+}
+
+.sim-table td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid #f1f2f6;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+.sim-table .gain { color: #00b894; font-weight: 600; }
+.sim-table .loss { color: #e17055; font-weight: 600; }
+
+/* Simulation modal — type & preset bars */
+.sim-type-bar,
+.sim-preset-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+}
+
+.sim-type-btn,
+.sim-preset-btn,
+.sim-index-btn {
+    padding: 0.4rem 0.9rem;
+    border: 2px solid #dfe6e9;
+    border-radius: 20px;
+    background: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.sim-type-btn:hover,
+.sim-preset-btn:hover,
+.sim-index-btn:hover {
+    border-color: var(--color-accent2);
+    color: var(--color-accent2);
+}
+
+.sim-type-btn.active,
+.sim-preset-btn.active,
+.sim-index-btn.active {
+    background: var(--color-accent2);
+    color: white;
+    border-color: var(--color-accent2);
+}
+
+.sim-custom-rate {
+    margin-top: 0.4rem;
+    max-width: 140px;
+}
+
+.sim-custom-rate.hidden {
+    display: none;
+}
+
+#sim-fixed-section.hidden,
+#sim-historical-section.hidden {
+    display: none;
+}
