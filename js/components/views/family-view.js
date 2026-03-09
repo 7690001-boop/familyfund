@@ -10,6 +10,12 @@ import * as summaryCards from '../ui/summary-cards.js';
 
 let _unsubs = [];
 let _container = null;
+let _renderTimer = null;
+
+function debouncedRender() {
+    if (_renderTimer) clearTimeout(_renderTimer);
+    _renderTimer = setTimeout(() => { _renderTimer = null; renderView(); }, 50);
+}
 
 export function mount(container) {
     unmount();
@@ -17,14 +23,15 @@ export function mount(container) {
     renderView();
 
     _unsubs.push(
-        store.subscribe('investments', () => renderView()),
-        store.subscribe('goals', () => renderView()),
-        store.subscribe('kids', () => renderView()),
-        store.subscribe('exchangeRates', () => renderView()),
+        store.subscribe('investments', debouncedRender),
+        store.subscribe('goals', debouncedRender),
+        store.subscribe('kids', debouncedRender),
+        store.subscribe('exchangeRates', debouncedRender),
     );
 }
 
 export function unmount() {
+    if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
     _unsubs.forEach(fn => fn());
     _unsubs = [];
     _container = null;

@@ -14,6 +14,8 @@ let _historicalData = null;
 let _tickerCurrency = null;
 let _exchangeRateAtPurchase = null;
 let _lastAutocompletedTicker = null;
+let _priceDateOffset = 0;       // day offset from purchase date for price lookup
+let _manualPriceMode = false;   // true when user selected the "ידני" price type
 
 export function showInvestmentModal(kid, existing) {
     const isEdit = !!existing;
@@ -26,6 +28,8 @@ export function showInvestmentModal(kid, existing) {
     _exchangeRateAtPurchase = inv.exchange_rate_at_purchase || null;
     _historicalData = null;
     _lastAutocompletedTicker = inv.ticker || null;
+    _priceDateOffset = 0;
+    _manualPriceMode = false;
 
     const html = `
         <h2>${title}</h2>
@@ -59,12 +63,21 @@ export function showInvestmentModal(kid, existing) {
         </div>
         <div id="purchase-price-section" class="form-group" hidden>
             <label>מחיר רכישה ליחידה</label>
+            <div class="price-date-nav" id="price-date-nav" hidden>
+                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-prev" title="יום קודם">◀</button>
+                <span class="price-date-label" id="price-date-label"></span>
+                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-next" title="יום הבא">▶</button>
+            </div>
             <div class="price-type-bar" id="price-type-bar">
                 <button type="button" class="price-type-btn active" data-type="close">סגירה</button>
                 <button type="button" class="price-type-btn" data-type="open">פתיחה</button>
                 <button type="button" class="price-type-btn" data-type="high">גבוה</button>
                 <button type="button" class="price-type-btn" data-type="low">נמוך</button>
                 <button type="button" class="price-type-btn" data-type="average">ממוצע</button>
+                <button type="button" class="price-type-btn" data-type="manual">ידני</button>
+            </div>
+            <div id="manual-price-input-wrap" class="manual-price-input-wrap" hidden>
+                <input type="number" id="manual-price-input" class="manual-price-input" step="any" min="0" placeholder="הכנס מחיר ידני">
             </div>
             <div id="purchase-price-display" class="purchase-price-display"></div>
         </div>
@@ -134,10 +147,15 @@ export function showInvestmentModal(kid, existing) {
         const currency = _tickerCurrency || 'ILS';
         const rate = exchangeRate || 1;
 
-        if (!finalAmount && finalShares && _historicalData) {
-            const activeBtn = modal.querySelector('#price-type-bar .price-type-btn.active');
-            const pType = activeBtn?.dataset.type || 'close';
-            const purchasePrice = _historicalData[pType];
+        if (!finalAmount && finalShares) {
+            let purchasePrice = null;
+            if (_manualPriceMode) {
+                purchasePrice = parseFloat(modal.querySelector('#manual-price-input')?.value) || null;
+            } else if (_historicalData) {
+                const activeBtn = modal.querySelector('#price-type-bar .price-type-btn.active');
+                const pType = activeBtn?.dataset.type || 'close';
+                purchasePrice = _historicalData[pType];
+            }
             if (purchasePrice > 0) {
                 finalAmount = currency === 'ILS'
                     ? finalShares * purchasePrice
@@ -204,40 +222,94 @@ export async function deleteInvestment(id) {
 
 // ─── Ticker autocomplete ──────────────────────────────────────
 
+function getHistoricTickers() {
+    const investments = store.get('investments') || [];
+    const seen = new Set();
+    const result = [];
+    for (const inv of investments) {
+        const sym = (inv.ticker || '').trim();
+        if (!sym || seen.has(sym.toUpperCase())) continue;
+        seen.add(sym.toUpperCase());
+        result.push({ symbol: sym, name: inv.asset_name || inv.nickname || '', historic: true });
+    }
+    return result;
+}
+
+function renderResults(modal, resultsEl, items, activeIndex) {
+    resultsEl.innerHTML = items.map((r, i) => `
+        <div class="ticker-result-item${r.historic ? ' ticker-result-historic' : ''}" data-index="${i}" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}">
+            ${r.historic ? '<span class="ticker-historic-badge">היסטוריה</span>' : ''}
+            <span class="ticker-symbol">${esc(r.symbol)}</span>
+            <span class="ticker-name">${esc(r.name)}</span>
+            ${r.exchange ? `<span class="ticker-exchange">${esc(r.exchange)}</span>` : ''}
+        </div>
+    `).join('');
+    resultsEl.hidden = items.length === 0;
+
+    resultsEl.querySelectorAll('.ticker-result-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            selectResult(modal, item.dataset.symbol, item.dataset.name);
+            resultsEl.hidden = true;
+        });
+    });
+    return items.length;
+}
+
 function setupTickerAutocomplete(modal) {
     const input = modal.querySelector('#inv-ticker');
     const btn = modal.querySelector('#ticker-search-btn');
     const resultsEl = modal.querySelector('#ticker-results');
     let activeIndex = -1;
+    let _currentItems = [];
+
+    function showHistoric() {
+        const historic = getHistoricTickers();
+        if (historic.length === 0) { resultsEl.hidden = true; return; }
+        activeIndex = -1;
+        _currentItems = historic;
+        renderResults(modal, resultsEl, historic, activeIndex);
+    }
 
     async function doSearch() {
         const q = input.value.trim();
-        if (q.length < 1) { resultsEl.hidden = true; return; }
+        if (q.length < 1) { showHistoric(); return; }
         btn.disabled = true;
-        const { searchTickers } = await import('../../services/price-service.js');
-        const results = await searchTickers(q);
-        btn.disabled = false;
-        if (results.length === 0) { resultsEl.hidden = true; return; }
-        activeIndex = -1;
-        resultsEl.innerHTML = results.map((r, i) => `
-            <div class="ticker-result-item" data-index="${i}" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}">
-                <span class="ticker-symbol">${esc(r.symbol)}</span>
-                <span class="ticker-name">${esc(r.name)}</span>
-                <span class="ticker-exchange">${esc(r.exchange)}</span>
-            </div>
-        `).join('');
-        resultsEl.hidden = false;
 
-        resultsEl.querySelectorAll('.ticker-result-item').forEach(item => {
-            item.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                selectResult(modal, item.dataset.symbol, item.dataset.name);
-                resultsEl.hidden = true;
-            });
-        });
+        // Instantly show filtered historic matches while API loads
+        const historic = getHistoricTickers().filter(h =>
+            h.symbol.toUpperCase().includes(q.toUpperCase()) ||
+            h.name.toLowerCase().includes(q.toLowerCase())
+        );
+        if (historic.length > 0) {
+            activeIndex = -1;
+            _currentItems = historic;
+            renderResults(modal, resultsEl, historic, activeIndex);
+        }
+
+        const { searchTickers } = await import('../../services/price-service.js');
+        const apiResults = await searchTickers(q);
+        btn.disabled = false;
+
+        // Merge: historic first, then API results, dedup by symbol
+        const seen = new Set(historic.map(h => h.symbol.toUpperCase()));
+        const merged = [
+            ...historic,
+            ...apiResults.filter(r => !seen.has(r.symbol.toUpperCase())),
+        ];
+        if (merged.length === 0) { resultsEl.hidden = true; return; }
+        activeIndex = -1;
+        _currentItems = merged;
+        renderResults(modal, resultsEl, merged, activeIndex);
     }
 
     btn.addEventListener('click', doSearch);
+
+    input.addEventListener('focus', () => {
+        if (!input.value.trim()) showHistoric();
+    });
+
+    input.addEventListener('input', doSearch);
 
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && resultsEl.hidden) { e.preventDefault(); doSearch(); return; }
@@ -406,14 +478,39 @@ function setupPurchasePriceLookup(modal) {
     const dateInput = modal.querySelector('#inv-date');
     const priceBar = modal.querySelector('#price-type-bar');
 
-    dateInput.addEventListener('change', () => triggerPurchasePriceLookup(modal));
+    dateInput.addEventListener('change', () => {
+        _priceDateOffset = 0;
+        triggerPurchasePriceLookup(modal);
+    });
 
     priceBar.addEventListener('click', (e) => {
         const btn = e.target.closest('.price-type-btn');
-        if (!btn || !_historicalData) return;
+        if (!btn) return;
         priceBar.querySelectorAll('.price-type-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        updatePurchasePriceDisplay(modal, _historicalData[btn.dataset.type], btn.dataset.type);
+
+        if (btn.dataset.type === 'manual') {
+            _manualPriceMode = true;
+            modal.querySelector('#manual-price-input-wrap').hidden = false;
+            showManualPriceControls(modal);
+            return;
+        }
+
+        _manualPriceMode = false;
+        modal.querySelector('#manual-price-input-wrap').hidden = true;
+        if (_historicalData) {
+            updatePurchasePriceDisplay(modal, _historicalData[btn.dataset.type], btn.dataset.type);
+        }
+    });
+
+    modal.querySelector('#price-date-prev').addEventListener('click', () => {
+        _priceDateOffset -= 1;
+        triggerPurchasePriceLookup(modal);
+    });
+
+    modal.querySelector('#price-date-next').addEventListener('click', () => {
+        _priceDateOffset += 1;
+        triggerPurchasePriceLookup(modal);
     });
 }
 
@@ -423,19 +520,35 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
     const dateStr = modal.querySelector('#inv-date').value;
     const section = modal.querySelector('#purchase-price-section');
     const display = modal.querySelector('#purchase-price-display');
+    const dateNavRow = modal.querySelector('#price-date-nav');
+    const dateLabelEl = modal.querySelector('#price-date-label');
 
     if (!ticker || !dateStr) { section.hidden = true; _historicalData = null; return; }
 
     section.hidden = false;
+
+    // In manual mode just ensure the section is visible without fetching
+    if (_manualPriceMode) {
+        showManualPriceControls(modal);
+        return;
+    }
+
     display.innerHTML = '<span class="price-loading">טוען מחיר...</span>';
     _historicalData = null;
+    dateNavRow.hidden = true;
+
+    // Apply day offset to base date
+    const base = new Date(dateStr + 'T00:00:00');
+    base.setDate(base.getDate() + _priceDateOffset);
+    const effectiveDateStr = base.toISOString().slice(0, 10);
+    if (dateLabelEl) dateLabelEl.textContent = effectiveDateStr;
 
     try {
         const { fetchHistoricalPrice, fetchHistoricalExchangeRate } = await import('../../services/price-service.js');
 
-        const promises = [fetchHistoricalPrice(ticker, dateStr)];
+        const promises = [fetchHistoricalPrice(ticker, effectiveDateStr)];
         const currency = _tickerCurrency || 'ILS';
-        if (currency !== 'ILS') promises.push(fetchHistoricalExchangeRate(currency, dateStr));
+        if (currency !== 'ILS') promises.push(fetchHistoricalExchangeRate(currency, effectiveDateStr));
 
         const [data, historicalRate] = await Promise.all(promises);
         _historicalData = data;
@@ -446,11 +559,17 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
             if (rateInput) { rateInput.value = historicalRate; updateFxEquiv(modal); }
         }
 
+        // Show actual trading date that was found (may differ from effectiveDateStr due to weekend/holiday fallback)
+        if (dateLabelEl && data.date) dateLabelEl.textContent = data.date;
+        dateNavRow.hidden = false;
+
         const activeBtn = modal.querySelector('#price-type-bar .price-type-btn.active');
         const type = activeBtn?.dataset.type || 'close';
-        updatePurchasePriceDisplay(modal, data[type], type);
+        if (type !== 'manual') updatePurchasePriceDisplay(modal, data[type], type);
     } catch {
         display.innerHTML = '<span class="price-error">לא נמצא מחיר לתאריך זה</span>';
+        if (dateLabelEl) dateLabelEl.textContent = effectiveDateStr;
+        dateNavRow.hidden = false;
     }
 }
 
@@ -489,4 +608,38 @@ function updatePurchasePriceDisplay(modal, price, type) {
     } else {
         display.innerHTML = '<span class="price-error">אין נתון ל' + (labels[type] || type) + '</span>';
     }
+}
+
+function showManualPriceControls(modal) {
+    const display = modal.querySelector('#purchase-price-display');
+    const currency = _tickerCurrency || 'ILS';
+
+    display.innerHTML = `
+        <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">חשב יחידות</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">חשב סכום</button>
+    `;
+
+    const getPrice = () => parseFloat(modal.querySelector('#manual-price-input')?.value) || 0;
+
+    display.querySelector('#use-purchase-price').addEventListener('click', () => {
+        const price = getPrice();
+        const sharesInput = modal.querySelector('#inv-shares');
+        const amountInput = modal.querySelector('#inv-amount');
+        const ilsAmount = parseFloat(amountInput.value);
+        if (!ilsAmount || ilsAmount <= 0 || !price || price <= 0) return;
+        const rate = parseFloat(modal.querySelector('#inv-exchange-rate')?.value) || _exchangeRateAtPurchase || 1;
+        const units = currency === 'ILS' ? ilsAmount / price : (rate <= 0 ? 0 : (ilsAmount / rate) / price);
+        if (units > 0) sharesInput.value = +units.toFixed(6);
+    });
+
+    display.querySelector('#calc-amount-from-shares').addEventListener('click', () => {
+        const price = getPrice();
+        const sharesInput = modal.querySelector('#inv-shares');
+        const amountInput = modal.querySelector('#inv-amount');
+        const units = parseFloat(sharesInput.value);
+        if (!units || units <= 0 || !price || price <= 0) return;
+        const rate = parseFloat(modal.querySelector('#inv-exchange-rate')?.value) || _exchangeRateAtPurchase || 1;
+        const ilsAmount = currency === 'ILS' ? units * price : (rate <= 0 ? 0 : units * price * rate);
+        if (ilsAmount > 0) { amountInput.value = +ilsAmount.toFixed(2); updateFxEquiv(modal); }
+    });
 }

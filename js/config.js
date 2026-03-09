@@ -20,3 +20,8 @@ export const FIREBASE_CDN = 'https://www.gstatic.com/firebasejs/10.14.1';
 export const YAHOO_PROXY = 'https://yahoo-proxy.7690001.workers.dev';
 export const YAHOO_CHART_URL  = YAHOO_PROXY + '/chart';
 export const YAHOO_SEARCH_URL = YAHOO_PROXY + '/search';
+
+// Globes API — Israeli mutual funds not available on Yahoo Finance
+export const GLOBES_PRICE_URL   = YAHOO_PROXY + '/globes/price';
+export const GLOBES_SEARCH_URL  = YAHOO_PROXY + '/globes/search';
+export const GLOBES_HISTORY_URL = YAHOO_PROXY + '/globes/history';

@@ -10,8 +10,23 @@ export function get(key) {
     return _state[key];
 }
 
+function shallowEqual(a, b) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a !== 'object' || typeof b !== 'object') return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+        if (a[k] !== b[k]) return false;
+    }
+    return true;
+}
+
 export function set(key, value) {
     const prev = _state[key];
+    if (shallowEqual(prev, value)) return;
     _state[key] = value;
     const cbs = _listeners.get(key);
     if (cbs) cbs.forEach(cb => cb(value, prev));

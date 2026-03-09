@@ -60,7 +60,15 @@ export async function updatePrices(familyId, priceMap, currencyMap) {
     const investments = store.get('investments') || [];
 
     const updates = investments
-        .filter(inv => inv.ticker && priceMap.has(inv.ticker.trim()))
+        .filter(inv => {
+            if (!inv.ticker || !priceMap.has(inv.ticker.trim())) return false;
+            const ticker = inv.ticker.trim();
+            const newPrice = priceMap.get(ticker);
+            const newCurrency = currencyMap?.get(ticker);
+            // Skip write if price and currency haven't changed
+            if (inv.current_price === newPrice && (!newCurrency || inv.currency === newCurrency)) return false;
+            return true;
+        })
         .map(inv => {
             const ticker = inv.ticker.trim();
             const data = { current_price: priceMap.get(ticker), updated_at: new Date().toISOString() };

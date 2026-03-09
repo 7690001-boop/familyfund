@@ -6,6 +6,7 @@
 import * as store from './store.js';
 
 let currentView = null;
+let currentViewName = null;
 let container = null;
 
 export function init(appContainer) {
@@ -31,8 +32,10 @@ export function init(appContainer) {
 }
 
 async function navigate(viewName) {
+    if (viewName === currentViewName) return;
     if (currentView?.unmount) currentView.unmount();
     currentView = null;
+    currentViewName = viewName;
 
     if (!container) return;
 

@@ -16,6 +16,12 @@ import { showGoalModal, deleteGoal } from '../modals/goal-modal.js';
 let _unsubs = [];
 let _container = null;
 let _kidName = null;
+let _renderTimer = null;
+
+function debouncedRender() {
+    if (_renderTimer) clearTimeout(_renderTimer);
+    _renderTimer = setTimeout(() => { _renderTimer = null; renderView(); }, 50);
+}
 
 export function mount(container, kidName) {
     unmount();
@@ -24,13 +30,14 @@ export function mount(container, kidName) {
     renderView();
 
     _unsubs.push(
-        store.subscribe('investments', () => renderView()),
-        store.subscribe('goals', () => renderView()),
-        store.subscribe('exchangeRates', () => renderView()),
+        store.subscribe('investments', debouncedRender),
+        store.subscribe('goals', debouncedRender),
+        store.subscribe('exchangeRates', debouncedRender),
     );
 }
 
 export function unmount() {
+    if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
     _unsubs.forEach(fn => fn());
     _unsubs = [];
     _container = null;

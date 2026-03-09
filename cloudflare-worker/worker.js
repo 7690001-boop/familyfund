@@ -3,6 +3,9 @@
 //   GET  /search?q=VOO&quotesCount=8&newsCount=0&listsCount=0
 //   GET  /chart/AAPL?interval=1d&range=1d
 //   GET  /chart/AAPL?period1=...&period2=...&interval=1d
+//   GET  /globes/price?symbol=5137690          — Israeli mutual fund price via Globes API
+//   GET  /globes/search?q=מיטב                — search Israeli funds by name/number
+//   GET  /globes/history?symbol=5137690&date=2025-03-06 — historical NAV
 //   POST /reset-password   { memberUid, newPassword }  Authorization: Bearer <idToken>
 //
 // Required Cloudflare secrets (set via: wrangler secret put NAME):
@@ -16,6 +19,7 @@
 
 const YAHOO_SEARCH = 'https://query1.finance.yahoo.com/v1/finance/search';
 const YAHOO_CHART  = 'https://query2.finance.yahoo.com/v8/finance/chart';
+const GLOBES_API   = 'https://gnet.globes.co.il/data/webservices/financial.asmx';
 
 const YAHOO_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -53,6 +57,12 @@ export default {
             // then pass it directly — '=' is valid in URL paths and Yahoo requires it literal.
             const ticker = decodeURIComponent(url.pathname.slice('/chart/'.length));
             upstreamUrl = `${YAHOO_CHART}/${ticker}?${url.searchParams}`;
+        } else if (url.pathname === '/globes/price') {
+            return handleGlobesPrice(url, origin, allowedOrigin);
+        } else if (url.pathname === '/globes/search') {
+            return handleGlobesSearch(url, origin, allowedOrigin);
+        } else if (url.pathname === '/globes/history') {
+            return handleGlobesHistory(url, origin, allowedOrigin);
         } else {
             console.log(`→ 404 unknown path: ${url.pathname}`);
             return corsResponse(JSON.stringify({ error: 'Not found' }), 404, origin, allowedOrigin);
@@ -74,6 +84,104 @@ export default {
         }
     },
 };
+
+// ─── Globes API Handlers (Israeli mutual funds) ──────────────────────────────
+
+function xmlText(xml, tag) {
+    const re = new RegExp(`<${tag}>(.*?)</${tag}>`, 's');
+    const m = xml.match(re);
+    return m ? m[1].trim() : null;
+}
+
+function parseGlobesInstrument(xml) {
+    const price = parseFloat(xmlText(xml, 'last'));
+    const name = xmlText(xml, 'name') || xmlText(xml, 'name_en') || '';
+    const symbol = xmlText(xml, 'symbol') || '';
+    const instrumentId = xmlText(xml, 'id') || '';
+    const currency = xmlText(xml, 'currency') || 'ILS';
+    const change = parseFloat(xmlText(xml, 'change')) || 0;
+    const changePercent = parseFloat(xmlText(xml, 'change_p')) || 0;
+
+    if (isNaN(price)) return null;
+    return { price, name, symbol, instrumentId, currency, change, changePercent };
+}
+
+async function handleGlobesPrice(url, origin, allowedOrigin) {
+    const symbol = url.searchParams.get('symbol');
+    if (!symbol) {
+        return corsResponse(JSON.stringify({ error: 'symbol parameter required' }), 400, origin, allowedOrigin);
+    }
+
+    const apiUrl = `${GLOBES_API}/listBySymbol?exchange=TASE&symbols=${encodeURIComponent(symbol)}`;
+    console.log(`→ globes price: ${apiUrl}`);
+
+    try {
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const xml = await resp.text();
+        const data = parseGlobesInstrument(xml);
+        if (!data) throw new Error('No price data in response');
+
+        console.log(`→ globes price OK: ${symbol} = ${data.price} ${data.currency}`);
+        return corsResponse(JSON.stringify(data), 200, origin, allowedOrigin);
+    } catch (e) {
+        console.log(`→ globes price error: ${e.message}`);
+        return corsResponse(JSON.stringify({ error: e.message }), 502, origin, allowedOrigin);
+    }
+}
+
+async function handleGlobesSearch(url, origin, allowedOrigin) {
+    const query = url.searchParams.get('q');
+    if (!query) {
+        return corsResponse(JSON.stringify({ error: 'q parameter required' }), 400, origin, allowedOrigin);
+    }
+
+    // Try listBySymbol first (exact fund number match)
+    const apiUrl = `${GLOBES_API}/listBySymbol?exchange=TASE&symbols=${encodeURIComponent(query)}`;
+    console.log(`→ globes search: ${apiUrl}`);
+
+    try {
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const xml = await resp.text();
+        const data = parseGlobesInstrument(xml);
+
+        const results = data ? [{ symbol: data.symbol, name: data.name, exchange: 'TASE', type: 'MUTUALFUND', source: 'globes' }] : [];
+        console.log(`→ globes search OK: ${results.length} results`);
+        return corsResponse(JSON.stringify({ quotes: results }), 200, origin, allowedOrigin);
+    } catch (e) {
+        console.log(`→ globes search error: ${e.message}`);
+        return corsResponse(JSON.stringify({ quotes: [] }), 200, origin, allowedOrigin);
+    }
+}
+
+async function handleGlobesHistory(url, origin, allowedOrigin) {
+    const symbol = url.searchParams.get('symbol');
+    const date = url.searchParams.get('date'); // YYYY-MM-DD
+    if (!symbol || !date) {
+        return corsResponse(JSON.stringify({ error: 'symbol and date parameters required' }), 400, origin, allowedOrigin);
+    }
+
+    // Convert YYYY-MM-DD to yyyymmdd
+    const dateStr = date.replace(/-/g, '');
+    const apiUrl = `${GLOBES_API}/GetYieldBetweenDatesBySymbol?exchange=TASE&symbol=${encodeURIComponent(symbol)}&since=${dateStr}&until=${dateStr}`;
+    console.log(`→ globes history: ${apiUrl}`);
+
+    try {
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const xml = await resp.text();
+
+        const price = parseFloat(xmlText(xml, 'until_close_price'));
+        if (isNaN(price)) throw new Error('No historical price data');
+
+        console.log(`→ globes history OK: ${symbol} @ ${date} = ${price}`);
+        return corsResponse(JSON.stringify({ price, currency: 'ILS', date }), 200, origin, allowedOrigin);
+    } catch (e) {
+        console.log(`→ globes history error: ${e.message}`);
+        return corsResponse(JSON.stringify({ error: e.message }), 502, origin, allowedOrigin);
+    }
+}
 
 // ─── Password Reset Handler ───────────────────────────────────────────────────
 

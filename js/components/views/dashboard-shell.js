@@ -21,6 +21,12 @@ let _unsubs = [];
 let _activeTab = null;
 let _kidViewMod = null;
 let _familyViewMod = null;
+let _renderTimer = null;
+
+function debouncedRenderShell() {
+    if (_renderTimer) clearTimeout(_renderTimer);
+    _renderTimer = setTimeout(() => { _renderTimer = null; renderShell(); }, 50);
+}
 
 export async function mount(container) {
     unmount();
@@ -39,13 +45,14 @@ export async function mount(container) {
     renderShell();
 
     _unsubs.push(
-        store.subscribe('kids', () => renderShell()),
+        store.subscribe('kids', () => debouncedRenderShell()),
         store.subscribe('family', () => updateTitle()),
-        store.subscribe('members', () => renderShell()),
+        store.subscribe('members', () => debouncedRenderShell()),
     );
 }
 
 export function unmount() {
+    if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
     _unsubs.forEach(fn => fn());
     _unsubs = [];
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
