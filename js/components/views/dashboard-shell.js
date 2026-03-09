@@ -48,6 +48,7 @@ export async function mount(container) {
         store.subscribe('kids', () => debouncedRenderShell()),
         store.subscribe('family', () => updateTitle()),
         store.subscribe('members', () => debouncedRenderShell()),
+        store.subscribe('priceLastUpdate', () => updatePriceStatus()),
     );
 }
 
@@ -204,6 +205,15 @@ async function switchTab(tabId) {
     } else {
         _kidViewMod = await import('./kid-view.js');
         _kidViewMod.mount(viewContainer, tabId);
+    }
+}
+
+function updatePriceStatus() {
+    const el = _container?.querySelector('.price-status');
+    const lastUpdate = store.get('priceLastUpdate');
+    if (el && lastUpdate) {
+        const d = new Date(lastUpdate);
+        el.textContent = 'מחירים: ' + d.toLocaleTimeString('he-IL');
     }
 }
 
