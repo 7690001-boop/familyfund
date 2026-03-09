@@ -38,6 +38,15 @@ export async function add(familyId, simulation) {
     });
 }
 
+export async function update(familyId, simulationId, data) {
+    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const db = getAppDb();
+    await updateDoc(doc(db, 'families', familyId, 'simulations', simulationId), {
+        ...data,
+        updated_at: new Date().toISOString(),
+    });
+}
+
 export async function remove(familyId, simulationId) {
     const { doc, deleteDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
     const db = getAppDb();

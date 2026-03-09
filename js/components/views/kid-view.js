@@ -127,8 +127,13 @@ function renderView() {
         simulations,
         {
             canAdd: can(user, 'simulation:create', { kidName: _kidName }),
+            canEdit: can(user, 'simulation:edit', { kidName: _kidName }),
             canDelete: can(user, 'simulation:delete', { kidName: _kidName }),
             onAdd: () => showSimulationModal(_kidName),
+            onEdit: (id) => {
+                const sim = allSimulations.find(s => s.id === id);
+                if (sim) showSimulationModal(_kidName, sim);
+            },
             onDelete: (id) => deleteSimulation(id),
         }
     );

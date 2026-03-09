@@ -38,7 +38,7 @@ ensureData();
 const _inflationState = {};
 
 export function render(container, simulations, options = {}) {
-    const { canAdd = false, canDelete = false, onAdd, onDelete } = options;
+    const { canAdd = false, canEdit = false, canDelete = false, onAdd, onEdit, onDelete } = options;
     const family = store.get('family') || {};
     const sym = family.currency_symbol || '₪';
 
@@ -72,7 +72,7 @@ export function render(container, simulations, options = {}) {
     `;
 
     wireAddBtn(container, onAdd, canAdd);
-    wireSimEvents(container, simulations, sym, canDelete, onDelete);
+    wireSimEvents(container, simulations, sym, canEdit, onEdit, canDelete, onDelete);
 }
 
 function wireAddBtn(container, onAdd, canAdd) {
@@ -82,7 +82,13 @@ function wireAddBtn(container, onAdd, canAdd) {
     );
 }
 
-function wireSimEvents(container, simulations, sym, canDelete, onDelete) {
+function wireSimEvents(container, simulations, sym, canEdit, onEdit, canDelete, onDelete) {
+    if (canEdit && onEdit) {
+        container.querySelectorAll('.edit-sim-btn').forEach(btn => {
+            btn.addEventListener('click', () => onEdit(btn.dataset.id));
+        });
+    }
+
     if (canDelete && onDelete) {
         container.querySelectorAll('.del-sim-btn').forEach(btn => {
             btn.addEventListener('click', () => onDelete(btn.dataset.id));
@@ -147,6 +153,7 @@ function computeResults(sim, useRealInflation) {
 }
 
 function renderSimCard(sim, sym, inflationOn) {
+    const editBtn = `<button class="btn btn-ghost edit-sim-btn" data-id="${esc(sim.id)}" title="ערוך">✎</button>`;
     const deleteBtn = `<button class="btn btn-ghost danger del-sim-btn" data-id="${esc(sim.id)}" title="מחק">✕</button>`;
 
     let subtitle = '';
@@ -181,6 +188,7 @@ function renderSimCard(sim, sym, inflationOn) {
                         <input type="checkbox" class="sim-inflation-toggle" data-id="${esc(sim.id)}" ${inflationOn ? 'checked' : ''}>
                         <span>בניכוי אינפלציה</span>
                     </label>
+                    ${editBtn}
                     ${deleteBtn}
                 </div>
             </div>

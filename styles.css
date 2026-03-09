@@ -2153,6 +2153,19 @@ body::after {
     transform: scale(1.05) rotate(-3deg);
 }
 
+/* Family view avatar in table */
+.family-kid-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.family-kid-cell svg {
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
 /* Responsive avatar editor */
 @media (max-width: 600px) {
     .avatar-editor {

@@ -40,6 +40,10 @@ const RULES = {
         if (user.role === 'manager') return true;
         return user.role === 'member' && user.kidName === ctx?.kidName;
     },
+    'simulation:edit':       (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
     'simulation:delete':     (user, ctx) => {
         if (user.role === 'manager') return true;
         return user.role === 'member' && user.kidName === ctx?.kidName;

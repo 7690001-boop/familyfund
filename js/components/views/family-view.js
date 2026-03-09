@@ -7,6 +7,7 @@ import { calcInvestment, kidInvestments, computeSummary, computeMatching } from 
 import { formatCurrency, formatPct } from '../../utils/format.js';
 import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import * as summaryCards from '../ui/summary-cards.js';
+import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 
 let _unsubs = [];
 let _container = null;
@@ -27,6 +28,7 @@ export function mount(container) {
         store.subscribe('goals', debouncedRender),
         store.subscribe('kids', debouncedRender),
         store.subscribe('exchangeRates', debouncedRender),
+        store.subscribe('members', debouncedRender),
     );
 }
 
@@ -49,6 +51,8 @@ function renderView() {
     let totalMatched = 0;
     let totalMatchable = 0;
 
+    const members = store.get('members') || [];
+
     let rows = '';
     kids.forEach(kid => {
         const inv = kidInvestments(store.get('investments') || [], kid);
@@ -57,9 +61,13 @@ function renderView() {
         totalMatched += match.matched;
         totalMatchable += match.total;
 
+        const member = members.find(m => m.name === kid);
+        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        const avatarSvg = renderAvatar(avatarCfg, 30);
+
         const glClass = cellGainLossClass(sum.gainLoss);
         rows += `<tr>
-            <td>${esc(kid)}</td>
+            <td><span class="family-kid-cell">${avatarSvg}<span>${esc(kid)}</span></span></td>
             <td class="cell-number">${formatCurrency(sum.totalInvested, sym)}</td>
             <td class="cell-number">${formatCurrency(sum.totalCurrent, sym)}</td>
             <td class="cell-number ${glClass}">${formatCurrency(sum.gainLoss, sym)}</td>
