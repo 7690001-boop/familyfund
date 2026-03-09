@@ -1910,3 +1910,248 @@ body::after {
 #sim-historical-section.hidden {
     display: none;
 }
+
+/* === Avatar System === */
+
+/* Tab avatars */
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.tab-avatar {
+    display: inline-flex;
+    flex-shrink: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.tab-btn:hover .tab-avatar {
+    transform: scale(1.15);
+}
+
+.tab-btn.active .tab-avatar {
+    box-shadow: 0 0 0 2px var(--color-tab-active), 0 2px 8px rgba(108,92,231,0.25);
+}
+
+/* Kid header with avatar */
+.kid-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.2rem 0 0.6rem;
+    animation: pop-in 0.4s ease-out;
+}
+
+.kid-avatar-display {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    transition: transform 0.25s ease;
+}
+
+.kid-avatar-display:hover {
+    transform: scale(1.08);
+}
+
+.kid-avatar-display svg {
+    border-radius: 50%;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.25s ease;
+}
+
+.kid-avatar-display:hover svg {
+    box-shadow: var(--shadow-lg);
+}
+
+.avatar-edit-btn {
+    position: absolute;
+    bottom: -2px;
+    left: -2px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--color-surface);
+    background: var(--color-accent2);
+    color: white;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.7);
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.kid-avatar-display:hover .avatar-edit-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.kid-header-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-top: 0.3rem;
+}
+
+/* Avatar Editor Modal */
+.avatar-editor {
+    display: flex;
+    gap: 1.5rem;
+    margin: 1rem 0;
+    min-height: 280px;
+}
+
+.avatar-preview-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--color-bg);
+    border-radius: var(--radius);
+    min-width: 160px;
+    position: sticky;
+    top: 0;
+}
+
+.avatar-preview-area svg {
+    border-radius: 50%;
+    box-shadow: var(--shadow-lg);
+    transition: all 0.3s ease;
+}
+
+.avatar-kid-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--color-text);
+}
+
+.avatar-controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-left: 0.25rem;
+}
+
+.avatar-controls::-webkit-scrollbar {
+    width: 5px;
+}
+
+.avatar-controls::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 10px;
+}
+
+.avatar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.avatar-section > label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.avatar-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.avatar-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.avatar-color-swatch:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.avatar-color-swatch.active {
+    border-color: var(--color-accent2);
+    box-shadow: 0 0 0 2px rgba(108,92,231,0.3), 0 2px 8px rgba(0,0,0,0.15);
+    transform: scale(1.1);
+}
+
+.avatar-option-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.avatar-option-btn {
+    padding: 0.3rem 0.7rem;
+    border-radius: 20px;
+    border: 2px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.avatar-option-btn:hover {
+    border-color: var(--color-accent2);
+    background: var(--color-tab-hover);
+    transform: translateY(-1px);
+}
+
+.avatar-option-btn.active {
+    background: var(--color-accent2);
+    color: white;
+    border-color: var(--color-accent2);
+    box-shadow: 0 2px 8px rgba(108,92,231,0.3);
+}
+
+.avatar-randomize {
+    align-self: center;
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    transition: transform 0.2s;
+}
+
+.avatar-randomize:hover {
+    transform: scale(1.05) rotate(-3deg);
+}
+
+/* Responsive avatar editor */
+@media (max-width: 600px) {
+    .avatar-editor {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .avatar-preview-area {
+        flex-direction: row;
+        min-width: unset;
+        width: 100%;
+        padding: 0.75rem;
+        position: static;
+    }
+
+    .avatar-controls {
+        max-height: 300px;
+        width: 100%;
+    }
+}

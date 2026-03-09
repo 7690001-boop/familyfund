@@ -14,6 +14,8 @@ import * as matchingSection from '../ui/matching-section.js';
 import { showInvestmentModal, deleteInvestment } from '../modals/investment-modal.js';
 import { showGoalModal, deleteGoal } from '../modals/goal-modal.js';
 import { showSimulationModal, deleteSimulation } from '../modals/simulation-modal.js';
+import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
+import { showAvatarModal } from '../modals/avatar-modal.js';
 
 let _unsubs = [];
 let _container = null;
@@ -36,6 +38,7 @@ export function mount(container, kidName) {
         store.subscribe('goals', debouncedRender),
         store.subscribe('simulations', debouncedRender),
         store.subscribe('exchangeRates', debouncedRender),
+        store.subscribe('members', debouncedRender),
     );
 }
 
@@ -57,13 +60,26 @@ function renderView() {
 
     const allSimulations = store.get('simulations') || [];
 
+    const members = store.get('members') || [];
+    const member = members.find(m => m.name === _kidName);
+    const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+
     const investments = kidInvestments(allInvestments, _kidName);
     const goals = kidGoals(allGoals, _kidName);
     const simulations = allSimulations.filter(s => s.kid === _kidName);
     const summary = computeSummary(investments);
     const matching = computeMatching(investments, family);
 
+    const canEditAvatar = user.role === 'manager' || user.kidName === _kidName;
+
     _container.innerHTML = `
+        <section class="kid-header">
+            <div class="kid-avatar-display" id="kid-avatar">
+                ${renderAvatar(avatarCfg, 72)}
+                ${canEditAvatar ? '<button class="avatar-edit-btn" id="edit-avatar-btn" title="ערוך אווטאר">✏️</button>' : ''}
+            </div>
+            <h2 class="kid-header-name">${_kidName}</h2>
+        </section>
         <section class="summary-cards" data-slot="summary"></section>
         <section class="section" data-slot="assets"></section>
         <section class="section" data-slot="goals"></section>
@@ -121,4 +137,9 @@ function renderView() {
         _container.querySelector('[data-slot="matching"]'),
         matching, family
     );
+
+    const editAvatarBtn = _container.querySelector('#edit-avatar-btn');
+    if (editAvatarBtn) {
+        editAvatarBtn.addEventListener('click', () => showAvatarModal(_kidName, avatarCfg));
+    }
 }

@@ -7,6 +7,8 @@ import { init as initRouter } from './router.js';
 import { init as initAuth } from './services/auth-service.js';
 import { init as initToast } from './components/ui/toast.js';
 import { init as initModal } from './components/ui/modal.js';
+import { initAvatarStore } from './components/ui/avatar.js';
+import * as store from './store.js';
 
 function spawnFloatingDecorations() {
     const emojis = ['💰', '⭐', '🪙', '🐷', '📈', '🎯', '💎', '🌟', '🎉', '🚀'];
@@ -39,6 +41,9 @@ async function boot() {
 
         // Initialize Firebase first
         await initFirebase();
+
+        // Wire avatar store reference
+        initAvatarStore(store);
 
         // Initialize global UI components
         initToast(document.body);

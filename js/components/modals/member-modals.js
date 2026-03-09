@@ -7,6 +7,8 @@ import { esc } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
 import * as familyService from '../../services/family-service.js';
+import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
+import { showAvatarModal } from './avatar-modal.js';
 
 export function showAddMemberModal() {
     const user = store.get('user');
@@ -86,15 +88,20 @@ export function showManageMembersModal() {
         const isMe = m.uid === user.uid;
         const roleLabel = m.role === 'manager' ? 'מנהל' : 'ילד/ה';
         const identifier = m.username ? 'משתמש: ' + m.username : m.email || '';
+        const avatarSvg = renderAvatar(m.avatar || DEFAULT_AVATAR, 36);
         memberRows += `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--color-border)">
-                <div>
-                    <strong>${esc(m.name)}</strong>
-                    <span style="color:var(--color-text-muted);font-size:0.85rem"> (${roleLabel})</span>
-                    <div style="font-size:0.82rem;color:var(--color-text-muted)">${esc(identifier)}</div>
+                <div style="display:flex;align-items:center;gap:0.6rem">
+                    <div class="member-avatar-thumb" data-name="${esc(m.name)}" style="cursor:pointer;border-radius:50%;overflow:hidden;flex-shrink:0">${avatarSvg}</div>
+                    <div>
+                        <strong>${esc(m.name)}</strong>
+                        <span style="color:var(--color-text-muted);font-size:0.85rem"> (${roleLabel})</span>
+                        <div style="font-size:0.82rem;color:var(--color-text-muted)">${esc(identifier)}</div>
+                    </div>
                 </div>
                 ${!isMe && m.role !== 'manager' ? `
                     <div style="display:flex;gap:0.25rem">
+                        <button class="btn btn-ghost edit-avatar-member-btn" data-name="${esc(m.name)}" title="ערוך אווטאר">🎨</button>
                         <button class="btn btn-ghost reset-password-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="איפוס סיסמה">🔑</button>
                         <button class="btn btn-ghost danger remove-member-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="הסר">✕</button>
                     </div>
@@ -135,6 +142,24 @@ export function showManageMembersModal() {
         btn.addEventListener('click', () => {
             closeModal();
             showRemoveMemberConfirm(btn.dataset.uid, btn.dataset.name);
+        });
+    });
+
+    modal.querySelectorAll('.edit-avatar-member-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const name = btn.dataset.name;
+            const member = members.find(m => m.name === name);
+            closeModal();
+            showAvatarModal(name, member?.avatar || DEFAULT_AVATAR);
+        });
+    });
+
+    modal.querySelectorAll('.member-avatar-thumb').forEach(thumb => {
+        thumb.addEventListener('click', () => {
+            const name = thumb.dataset.name;
+            const member = members.find(m => m.name === name);
+            closeModal();
+            showAvatarModal(name, member?.avatar || DEFAULT_AVATAR);
         });
     });
 }

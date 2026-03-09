@@ -16,6 +16,7 @@ import { showAddMemberModal, showManageMembersModal } from '../modals/member-mod
 import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
 import { exportData, importData } from '../modals/data-transfer.js';
+import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 
 let _container = null;
 let _unsubs = [];
@@ -99,10 +100,15 @@ function renderShell() {
     }
     headerActions += `<button id="logout-btn" class="btn btn-icon" title="התנתק">🚪</button>`;
 
+    const members = store.get('members') || [];
+
     let tabsHtml = '';
     visibleKids.forEach(kid => {
         const active = _activeTab === kid ? ' active' : '';
-        tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}">${esc(kid)}</button>`;
+        const member = members.find(m => m.name === kid);
+        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        const avatarSvg = renderAvatar(avatarCfg, 28);
+        tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}</button>`;
     });
     if (visibleKids.length > 1 || (user.role === 'member' && kids.length > 1)) {
         const active = _activeTab === '__family__' ? ' active' : '';

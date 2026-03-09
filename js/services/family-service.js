@@ -87,7 +87,10 @@ export async function addMember(familyId, memberData) {
 export async function updateMember(familyId, memberUid, updates) {
     const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
     const db = getAppDb();
-    await updateDoc(doc(db, 'families', familyId, 'members', memberUid), updates);
+    await updateDoc(doc(db, 'families', familyId, 'members', memberUid), {
+        ...updates,
+        updated_at: new Date().toISOString(),
+    });
 }
 
 export async function removeMember(familyId, memberUid) {
