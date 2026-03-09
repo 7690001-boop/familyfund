@@ -8,18 +8,31 @@ import { computeFixedRate, computeHistorical, yearlyFromMonthly } from '../../ut
 import * as store from '../../store.js';
 
 let _historicalData = null;
+let _inflationData = null;
 
-async function ensureHistoricalData() {
-    if (_historicalData) return _historicalData;
-    try {
-        const resp = await fetch('./js/data/historical-monthly.json');
-        _historicalData = await resp.json();
-    } catch (e) {
-        console.error('Failed to load historical data:', e);
-        _historicalData = {};
+async function ensureData() {
+    if (!_historicalData) {
+        try {
+            const resp = await fetch('./js/data/historical-monthly.json');
+            _historicalData = await resp.json();
+        } catch (e) {
+            console.error('Failed to load historical data:', e);
+            _historicalData = {};
+        }
     }
-    return _historicalData;
+    if (!_inflationData) {
+        try {
+            const resp = await fetch('./js/data/us-inflation.json');
+            _inflationData = await resp.json();
+        } catch (e) {
+            console.error('Failed to load inflation data:', e);
+            _inflationData = {};
+        }
+    }
 }
+
+// Preload data on module init
+ensureData();
 
 // Track inflation toggle state per simulation
 const _inflationState = {};
@@ -70,14 +83,12 @@ function wireAddBtn(container, onAdd, canAdd) {
 }
 
 function wireSimEvents(container, simulations, sym, canDelete, onDelete) {
-    // Delete buttons
     if (canDelete && onDelete) {
         container.querySelectorAll('.del-sim-btn').forEach(btn => {
             btn.addEventListener('click', () => onDelete(btn.dataset.id));
         });
     }
 
-    // Inflation toggles
     container.querySelectorAll('.sim-inflation-toggle').forEach(toggle => {
         toggle.addEventListener('change', () => {
             const simId = toggle.dataset.id;
@@ -89,14 +100,18 @@ function wireSimEvents(container, simulations, sym, canDelete, onDelete) {
             const bodyEl = card.querySelector('.sim-card-body');
             if (bodyEl) {
                 bodyEl.innerHTML = renderSimBody(sim, sym, toggle.checked);
+                wireTableToggle(card);
             }
         });
     });
 
-    // Collapse toggles
-    container.querySelectorAll('.sim-table-toggle').forEach(btn => {
+    container.querySelectorAll('.sim-card').forEach(card => wireTableToggle(card));
+}
+
+function wireTableToggle(card) {
+    card.querySelectorAll('.sim-table-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
-            const table = btn.closest('.sim-card').querySelector('.sim-table-wrap');
+            const table = card.querySelector('.sim-table-wrap');
             if (table) {
                 table.classList.toggle('collapsed');
                 btn.textContent = table.classList.contains('collapsed') ? 'הצג פירוט' : 'הסתר פירוט';
@@ -105,7 +120,7 @@ function wireSimEvents(container, simulations, sym, canDelete, onDelete) {
     });
 }
 
-function computeResults(sim, inflationPct) {
+function computeResults(sim, useRealInflation) {
     if (sim.type === 'historical' && _historicalData) {
         const indexData = _historicalData[sim.index_key];
         if (indexData?.monthly?.length) {
@@ -115,7 +130,8 @@ function computeResults(sim, inflationPct) {
                 priceData: indexData.monthly,
                 startDate: `${sim.start_year || 2000}-01`,
                 years: sim.years || 10,
-                inflationPct,
+                inflationPct: 0,
+                inflationData: useRealInflation ? _inflationData : null,
             });
         }
     }
@@ -124,7 +140,9 @@ function computeResults(sim, inflationPct) {
         monthlyContribution: sim.monthly_contribution || 0,
         annualReturnPct: sim.annual_return_pct || 10,
         years: sim.years || 10,
-        inflationPct,
+        inflationPct: 0,
+        inflationData: useRealInflation ? _inflationData : null,
+        startYear: sim.type === 'historical' ? (sim.start_year || 2000) : null,
     });
 }
 
@@ -139,6 +157,18 @@ function renderSimCard(sim, sym, inflationOn) {
         subtitle = `תשואה ${sim.annual_return_pct}%`;
     }
 
+    // Input summary
+    const initial = sim.initial_amount || 0;
+    const monthly = sim.monthly_contribution || 0;
+    const years = sim.years || 0;
+    const inputSummaryHtml = `
+        <div class="sim-input-summary">
+            <span>סכום התחלתי: <strong dir="ltr">${formatCurrency(initial, sym)}</strong></span>
+            <span>הפקדה חודשית: <strong dir="ltr">${formatCurrency(monthly, sym)}</strong></span>
+            <span>תקופה: <strong>${years} שנים</strong></span>
+        </div>
+    `;
+
     return `
         <div class="sim-card" data-id="${esc(sim.id)}">
             <div class="sim-card-header">
@@ -147,13 +177,14 @@ function renderSimCard(sim, sym, inflationOn) {
                     <span class="sim-card-subtitle">${subtitle}</span>
                 </div>
                 <div class="sim-card-actions">
-                    <label class="sim-inflation-label" title="התאמה לאינפלציה">
+                    <label class="sim-inflation-label" title="התאמה לאינפלציה אמריקאית אמיתית">
                         <input type="checkbox" class="sim-inflation-toggle" data-id="${esc(sim.id)}" ${inflationOn ? 'checked' : ''}>
-                        <span>בניכוי אינפלציה (3%)</span>
+                        <span>בניכוי אינפלציה</span>
                     </label>
                     ${deleteBtn}
                 </div>
             </div>
+            ${inputSummaryHtml}
             <div class="sim-card-body">
                 ${renderSimBody(sim, sym, inflationOn)}
             </div>
@@ -162,8 +193,7 @@ function renderSimCard(sim, sym, inflationOn) {
 }
 
 function renderSimBody(sim, sym, inflationOn) {
-    const inflationPct = inflationOn ? 3 : 0;
-    const monthly = computeResults(sim, inflationPct);
+    const monthly = computeResults(sim, inflationOn);
     if (monthly.length === 0) return '<p class="empty-state">אין מספיק נתונים לתקופה הנבחרת</p>';
 
     const yearly = yearlyFromMonthly(monthly);
@@ -181,7 +211,7 @@ function renderSimBody(sim, sym, inflationOn) {
                 <span class="sim-summary-value">${formatCurrency(totalContributed, sym)}</span>
             </div>
             <div class="sim-summary-card highlight">
-                <span class="sim-summary-label">שווי סופי</span>
+                <span class="sim-summary-label">שווי סופי${inflationOn ? ' (ערך ריאלי)' : ''}</span>
                 <span class="sim-summary-value">${formatCurrency(totalValue, sym)}</span>
             </div>
             <div class="sim-summary-card ${earningsPositive ? 'earnings-positive' : 'earnings-negative'}">
@@ -197,7 +227,7 @@ function renderSimBody(sim, sym, inflationOn) {
         const pctOfTotal = Math.round((earnings / totalValue) * 100);
         wowHtml = `
             <div class="sim-wow">
-                הכסף שלך עבד בשביליך! ${pctOfTotal}% מהסכום הסופי הגיע מריבית דריבית בלבד${inflationOn ? ' (בניכוי אינפלציה)' : ''}!
+                הכסף שלך עבד בשביליך! ${pctOfTotal}% מהסכום הסופי הגיע מריבית דריבית בלבד${inflationOn ? ' (בניכוי אינפלציה אמיתית)' : ''}!
             </div>
         `;
     }
@@ -230,7 +260,7 @@ function renderSimBody(sim, sym, inflationOn) {
         <div class="sim-bar-chart">${barsHtml}</div>
     `;
 
-    // Year-by-year table (collapsed by default)
+    // Year-by-year table
     let tableRows = '';
     for (const y of yearly) {
         const yearLabel = y.date ? y.date.slice(0, 4) : `שנה ${y.year}`;

@@ -1657,6 +1657,24 @@ body::after {
     flex-wrap: wrap;
 }
 
+/* Input summary row */
+.sim-input-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.8rem;
+    background: #f8f9fa;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: #636e72;
+}
+
+.sim-input-summary strong {
+    color: #2d3436;
+    font-weight: 600;
+}
+
 .sim-inflation-label {
     display: flex;
     align-items: center;
