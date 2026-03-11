@@ -7,11 +7,17 @@ import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 
 let unsubscribe = null;
+let _fs = null;
+
+async function fs() {
+    if (!_fs) _fs = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    return _fs;
+}
 
 export async function listen(familyId) {
     stopListening();
 
-    const { collection, onSnapshot } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { collection, onSnapshot } = await fs();
     const db = getAppDb();
     const ref = collection(db, 'families', familyId, 'goals');
 
@@ -29,7 +35,7 @@ export function stopListening() {
 }
 
 export async function add(familyId, goal) {
-    const { collection, addDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { collection, addDoc } = await fs();
     const db = getAppDb();
     const ref = collection(db, 'families', familyId, 'goals');
     await addDoc(ref, {
@@ -39,7 +45,7 @@ export async function add(familyId, goal) {
 }
 
 export async function update(familyId, goalId, data) {
-    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, updateDoc } = await fs();
     const db = getAppDb();
     await updateDoc(doc(db, 'families', familyId, 'goals', goalId), {
         ...data,
@@ -48,7 +54,7 @@ export async function update(familyId, goalId, data) {
 }
 
 export async function remove(familyId, goalId) {
-    const { doc, deleteDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, deleteDoc } = await fs();
     const db = getAppDb();
     await deleteDoc(doc(db, 'families', familyId, 'goals', goalId));
 }

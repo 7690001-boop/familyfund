@@ -8,7 +8,7 @@ import { open as openModal, close as closeModal } from '../ui/modal.js';
 import * as familyService from '../../services/family-service.js';
 import {
     DEFAULT_AVATAR, renderAvatar,
-    SKIN_COLORS, HAIR_COLORS, BG_COLORS,
+    SKIN_COLORS, EYE_COLORS, HAIR_COLORS, BG_COLORS,
     FACE_SHAPE_OPTIONS, EYES_OPTIONS, EYEBROW_OPTIONS, MOUTH_OPTIONS,
     HAIR_OPTIONS, ACCESSORY_OPTIONS, GLASSES_OPTIONS,
     LABELS,
@@ -18,7 +18,12 @@ import {
 
 export function showAvatarModal(kidName, currentAvatar) {
     const cfg = { ...DEFAULT_AVATAR, ...(currentAvatar || {}) };
-    let draft = { ...cfg };
+    // Normalize legacy single accessory to array
+    if (cfg.accessory && cfg.accessory !== 'none' && (!cfg.accessories || !cfg.accessories.length)) {
+        cfg.accessories = [cfg.accessory];
+    }
+    if (!Array.isArray(cfg.accessories)) cfg.accessories = [];
+    let draft = { ...cfg, accessories: [...cfg.accessories] };
 
     function preview() {
         const el = document.getElementById('avatar-preview');
@@ -37,6 +42,14 @@ export function showAvatarModal(kidName, currentAvatar) {
         return `<div class="avatar-option-row" id="${id}">
             ${options.map(o => `
                 <button class="avatar-option-btn${o === current ? ' active' : ''}" data-value="${o}">${labels[o]}</button>
+            `).join('')}
+        </div>`;
+    }
+
+    function multiOptionPicker(id, options, labels, currentArr) {
+        return `<div class="avatar-option-row" id="${id}">
+            ${options.map(o => `
+                <button class="avatar-option-btn avatar-multi-btn${currentArr.includes(o) ? ' active' : ''}" data-value="${o}">${labels[o]}</button>
             `).join('')}
         </div>`;
     }
@@ -77,6 +90,10 @@ export function showAvatarModal(kidName, currentAvatar) {
                     ${optionPicker('pick-eyes', EYES_OPTIONS, EYES_LABELS, draft.eyes)}
                 </div>
                 <div class="avatar-section">
+                    <label>${LABELS.eyeColor}</label>
+                    ${colorPicker('pick-eye-color', EYE_COLORS, draft.eyeColor)}
+                </div>
+                <div class="avatar-section">
                     <label>${LABELS.glasses}</label>
                     ${optionPicker('pick-glasses', GLASSES_OPTIONS, GLASSES_LABELS, draft.glasses)}
                 </div>
@@ -97,8 +114,8 @@ export function showAvatarModal(kidName, currentAvatar) {
                     ${colorPicker('pick-hair-color', HAIR_COLORS, draft.hairColor)}
                 </div>
                 <div class="avatar-section">
-                    <label>${LABELS.accessory}</label>
-                    ${optionPicker('pick-accessory', ACCESSORY_OPTIONS, ACCESSORY_LABELS, draft.accessory)}
+                    <label>${LABELS.accessories} <span class="avatar-hint">(ניתן לבחור כמה)</span></label>
+                    ${multiOptionPicker('pick-accessories', ACCESSORY_OPTIONS, ACCESSORY_LABELS, draft.accessories)}
                 </div>
                 <button class="btn btn-ghost avatar-randomize" id="avatar-randomize" type="button">🎲 אקראי</button>
             </div>
@@ -125,9 +142,10 @@ export function showAvatarModal(kidName, currentAvatar) {
     }
     wireColors('pick-bg', 'bgColor');
     wireColors('pick-skin', 'skin');
+    wireColors('pick-eye-color', 'eyeColor');
     wireColors('pick-hair-color', 'hairColor');
 
-    // Wire option pickers
+    // Wire single-select option pickers
     function wireOptions(containerId, key) {
         modal.querySelector('#' + containerId)?.addEventListener('click', (e) => {
             const btn = e.target.closest('.avatar-option-btn');
@@ -143,8 +161,23 @@ export function showAvatarModal(kidName, currentAvatar) {
     wireOptions('pick-eyebrows', 'eyebrows');
     wireOptions('pick-mouth', 'mouth');
     wireOptions('pick-hair', 'hair');
-    wireOptions('pick-accessory', 'accessory');
     wireOptions('pick-glasses', 'glasses');
+
+    // Wire multi-select accessories (toggle on/off)
+    modal.querySelector('#pick-accessories')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.avatar-multi-btn');
+        if (!btn) return;
+        const val = btn.dataset.value;
+        const idx = draft.accessories.indexOf(val);
+        if (idx >= 0) {
+            draft.accessories.splice(idx, 1);
+            btn.classList.remove('active');
+        } else {
+            draft.accessories.push(val);
+            btn.classList.add('active');
+        }
+        preview();
+    });
 
     // Wire freckles toggle
     modal.querySelector('#pick-freckles')?.addEventListener('click', (e) => {
@@ -159,15 +192,21 @@ export function showAvatarModal(kidName, currentAvatar) {
     // Randomize
     modal.querySelector('#avatar-randomize')?.addEventListener('click', () => {
         const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+        // Pick 0-3 random accessories
+        const numAcc = Math.floor(Math.random() * 3);
+        const shuffled = [...ACCESSORY_OPTIONS].sort(() => Math.random() - 0.5);
+        const randomAccs = shuffled.slice(0, numAcc);
+
         draft = {
             skin: pick(SKIN_COLORS),
             faceShape: pick(FACE_SHAPE_OPTIONS),
             hair: pick(HAIR_OPTIONS),
             hairColor: pick(HAIR_COLORS),
             eyes: pick(EYES_OPTIONS),
+            eyeColor: pick(EYE_COLORS),
             eyebrows: pick(EYEBROW_OPTIONS),
             mouth: pick(MOUTH_OPTIONS),
-            accessory: pick(ACCESSORY_OPTIONS),
+            accessories: randomAccs,
             glasses: pick(GLASSES_OPTIONS),
             freckles: Math.random() > 0.7,
             bgColor: pick(BG_COLORS),
@@ -189,14 +228,18 @@ export function showAvatarModal(kidName, currentAvatar) {
         }
         updateColorActive('pick-bg', draft.bgColor);
         updateColorActive('pick-skin', draft.skin);
+        updateColorActive('pick-eye-color', draft.eyeColor);
         updateColorActive('pick-hair-color', draft.hairColor);
         updateOptionActive('pick-face', draft.faceShape);
         updateOptionActive('pick-eyes', draft.eyes);
         updateOptionActive('pick-eyebrows', draft.eyebrows);
         updateOptionActive('pick-mouth', draft.mouth);
         updateOptionActive('pick-hair', draft.hair);
-        updateOptionActive('pick-accessory', draft.accessory);
         updateOptionActive('pick-glasses', draft.glasses);
+        // Multi-select accessories
+        modal.querySelectorAll('#pick-accessories .avatar-multi-btn').forEach(b => {
+            b.classList.toggle('active', draft.accessories.includes(b.dataset.value));
+        });
         // Freckles toggle
         modal.querySelectorAll('#pick-freckles .avatar-option-btn').forEach(b => {
             b.classList.toggle('active', (b.dataset.value === 'true') === draft.freckles);

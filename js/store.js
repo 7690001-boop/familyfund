@@ -19,7 +19,16 @@ function shallowEqual(a, b) {
     const keysB = Object.keys(b);
     if (keysA.length !== keysB.length) return false;
     for (const k of keysA) {
-        if (a[k] !== b[k]) return false;
+        if (a[k] !== b[k]) {
+            // For arrays of objects (e.g. Firestore snapshots), compare one level deeper
+            if (typeof a[k] === 'object' && typeof b[k] === 'object'
+                && a[k] !== null && b[k] !== null
+                && !Array.isArray(a[k]) && !Array.isArray(b[k])) {
+                if (!shallowEqual(a[k], b[k])) return false;
+            } else {
+                return false;
+            }
+        }
     }
     return true;
 }

@@ -3,17 +3,25 @@
 // ============================================================
 
 import { FIREBASE_CDN, firebaseConfig, YAHOO_PROXY } from '../config.js';
-import { getAppDb, getApp } from '../firebase-init.js';
+import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
 
 let unsubFamily = null;
 let unsubMembers = null;
+let _backfillDone = false;
+let _fs = null;
+
+async function fs() {
+    if (!_fs) _fs = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    return _fs;
+}
 
 export async function listen(familyId) {
     stopListening();
+    _backfillDone = false;
 
-    const { doc, collection, onSnapshot } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, collection, onSnapshot, getDoc, setDoc: setDocFn } = await fs();
     const db = getAppDb();
 
     // Listen to family doc
@@ -35,14 +43,16 @@ export async function listen(familyId) {
         const kids = members.filter(m => m.role === 'member').map(m => m.name);
         store.set('kids', kids);
 
-        // Backfill usernames lookup docs for any members that predate this feature
-        const { getDoc, setDoc: setDocFn } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
-        for (const member of members) {
-            if (!member.username || member.role !== 'member') continue;
-            const key = member.username.toLowerCase();
-            const existing = await getDoc(doc(db, 'usernames', key));
-            if (!existing.exists()) {
-                await setDocFn(doc(db, 'usernames', key), { familyId, uid: member.uid || member.id });
+        // Backfill usernames lookup docs once per session
+        if (!_backfillDone) {
+            _backfillDone = true;
+            for (const member of members) {
+                if (!member.username || member.role !== 'member') continue;
+                const key = member.username.toLowerCase();
+                const existing = await getDoc(doc(db, 'usernames', key));
+                if (!existing.exists()) {
+                    await setDocFn(doc(db, 'usernames', key), { familyId, uid: member.uid || member.id });
+                }
             }
         }
     }, (err) => {
@@ -56,7 +66,7 @@ export function stopListening() {
 }
 
 export async function createFamily(familyData, managerUid) {
-    const { doc, setDoc, collection: col } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, setDoc } = await fs();
     const db = getAppDb();
 
     const familyId = managerUid; // Use manager UID as family ID for simplicity
@@ -70,7 +80,7 @@ export async function createFamily(familyData, managerUid) {
 }
 
 export async function updateFamily(familyId, updates) {
-    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, updateDoc } = await fs();
     const db = getAppDb();
     await updateDoc(doc(db, 'families', familyId), {
         ...updates,
@@ -79,13 +89,13 @@ export async function updateFamily(familyId, updates) {
 }
 
 export async function addMember(familyId, memberData) {
-    const { doc, setDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, setDoc } = await fs();
     const db = getAppDb();
     await setDoc(doc(db, 'families', familyId, 'members', memberData.uid), memberData);
 }
 
 export async function updateMember(familyId, memberUid, updates) {
-    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, updateDoc } = await fs();
     const db = getAppDb();
     await updateDoc(doc(db, 'families', familyId, 'members', memberUid), {
         ...updates,
@@ -93,8 +103,12 @@ export async function updateMember(familyId, memberUid, updates) {
     });
 }
 
+export async function togglePrivacy(familyId, memberUid, isPrivate) {
+    await updateMember(familyId, memberUid, { private: isPrivate });
+}
+
 export async function removeMember(familyId, memberUid) {
-    const { doc, deleteDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, deleteDoc } = await fs();
     const db = getAppDb();
     await deleteDoc(doc(db, 'families', familyId, 'members', memberUid));
 }
@@ -104,7 +118,7 @@ export async function removeMember(familyId, memberUid) {
 export async function createMemberAccount(username, password, familyId, displayName) {
     const { initializeApp, deleteApp } = await import(`${FIREBASE_CDN}/firebase-app.js`);
     const { getAuth, createUserWithEmailAndPassword, signOut } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
-    const { doc, setDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, setDoc } = await fs();
     const { usernameToEmail } = await import('./auth-service.js');
     const db = getAppDb();
 

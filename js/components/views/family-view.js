@@ -8,6 +8,7 @@ import { formatCurrency, formatPct } from '../../utils/format.js';
 import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import * as summaryCards from '../ui/summary-cards.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
+import { isImpersonating, getParentUser } from '../../services/impersonate.js';
 
 let _unsubs = [];
 let _container = null;
@@ -42,40 +43,58 @@ export function unmount() {
 function renderView() {
     if (!_container) return;
 
+    const user = store.get('user');
     const family = store.get('family') || {};
     const kids = store.get('kids') || [];
-    const allInvestments = (store.get('investments') || []).map(calcInvestment);
+    const rawInvestments = store.get('investments') || [];
     const sym = family.currency_symbol || '₪';
-    const familySummary = computeSummary(allInvestments);
 
+    // When impersonating, treat viewer as the kid (not a manager) so privacy is respected
+    const isManager = !isImpersonating() && user?.role === 'manager';
+
+    const members = store.get('members') || [];
+    const hiddenLabel = '••••';
+
+    // Build per-kid data and determine which kids are hidden
+    let visibleInvestments = [];
     let totalMatched = 0;
     let totalMatchable = 0;
 
-    const members = store.get('members') || [];
-
     let rows = '';
     kids.forEach(kid => {
-        const inv = kidInvestments(store.get('investments') || [], kid);
+        const inv = kidInvestments(rawInvestments, kid);
         const sum = computeSummary(inv);
         const match = computeMatching(inv, family);
-        totalMatched += match.matched;
-        totalMatchable += match.total;
 
         const member = members.find(m => m.name === kid);
         const avatarCfg = member?.avatar || DEFAULT_AVATAR;
         const avatarSvg = renderAvatar(avatarCfg, 30);
 
-        const glClass = cellGainLossClass(sum.gainLoss);
+        // Hide amounts if the kid is private and the viewer is another member (not the kid themselves and not a manager)
+        const kidIsPrivate = member?.private === true;
+        const isSelf = user?.kidName === kid;
+        const hideAmounts = kidIsPrivate && !isManager && !isSelf;
+
+        // Only include visible kids in the family totals so private amounts can't be reverse-calculated
+        if (!hideAmounts) {
+            visibleInvestments = visibleInvestments.concat(inv.map(calcInvestment));
+            totalMatched += match.matched;
+            totalMatchable += match.total;
+        }
+
+        const glClass = hideAmounts ? '' : cellGainLossClass(sum.gainLoss);
         rows += `<tr>
-            <td><span class="family-kid-cell">${avatarSvg}<span>${esc(kid)}</span></span></td>
-            <td class="cell-number">${formatCurrency(sum.totalInvested, sym)}</td>
-            <td class="cell-number">${formatCurrency(sum.totalCurrent, sym)}</td>
-            <td class="cell-number ${glClass}">${formatCurrency(sum.gainLoss, sym)}</td>
-            <td class="cell-number ${glClass}">${formatPct(sum.gainLossPct)}</td>
-            <td class="cell-number">${formatCurrency(match.matched, sym)} / ${formatCurrency(match.total, sym)}</td>
+            <td><span class="family-kid-cell">${avatarSvg}<span>${esc(kid)}</span>${kidIsPrivate ? ' <span class="private-badge">🔒</span>' : ''}</span></td>
+            <td class="cell-number">${hideAmounts ? hiddenLabel : formatCurrency(sum.totalInvested, sym)}</td>
+            <td class="cell-number">${hideAmounts ? hiddenLabel : formatCurrency(sum.totalCurrent, sym)}</td>
+            <td class="cell-number ${glClass}">${hideAmounts ? hiddenLabel : formatCurrency(sum.gainLoss, sym)}</td>
+            <td class="cell-number ${glClass}">${hideAmounts ? hiddenLabel : formatPct(sum.gainLossPct)}</td>
+            <td class="cell-number">${hideAmounts ? hiddenLabel : `${formatCurrency(match.matched, sym)} / ${formatCurrency(match.total, sym)}`}</td>
         </tr>`;
     });
 
+    // Summary only includes visible kids' data
+    const familySummary = computeSummary(visibleInvestments);
     const matchPct = totalMatchable > 0 ? totalMatched / totalMatchable : 0;
 
     _container.innerHTML = `

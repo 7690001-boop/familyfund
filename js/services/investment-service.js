@@ -7,11 +7,17 @@ import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 
 let unsubscribe = null;
+let _fs = null;
+
+async function fs() {
+    if (!_fs) _fs = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    return _fs;
+}
 
 export async function listen(familyId) {
     stopListening();
 
-    const { collection, onSnapshot } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { collection, onSnapshot } = await fs();
     const db = getAppDb();
     const ref = collection(db, 'families', familyId, 'investments');
 
@@ -29,7 +35,7 @@ export function stopListening() {
 }
 
 export async function add(familyId, investment) {
-    const { collection, addDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { collection, addDoc } = await fs();
     const db = getAppDb();
     const ref = collection(db, 'families', familyId, 'investments');
     await addDoc(ref, {
@@ -39,7 +45,7 @@ export async function add(familyId, investment) {
 }
 
 export async function update(familyId, investmentId, data) {
-    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, updateDoc } = await fs();
     const db = getAppDb();
     await updateDoc(doc(db, 'families', familyId, 'investments', investmentId), {
         ...data,
@@ -48,14 +54,14 @@ export async function update(familyId, investmentId, data) {
 }
 
 export async function remove(familyId, investmentId) {
-    const { doc, deleteDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, deleteDoc } = await fs();
     const db = getAppDb();
     await deleteDoc(doc(db, 'families', familyId, 'investments', investmentId));
 }
 
 // Batch update prices (and optionally currencies) for all investments with matching tickers
 export async function updatePrices(familyId, priceMap, currencyMap) {
-    const { doc, updateDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, updateDoc } = await fs();
     const db = getAppDb();
     const investments = store.get('investments') || [];
 

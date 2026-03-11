@@ -10,6 +10,13 @@ import { emit } from '../event-bus.js';
 const PRICE_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 let priceTimer = null;
 let _waitForInvestmentsUnsub = null;
+let _fetchInProgress = false;
+let _fs = null;
+
+async function fs() {
+    if (!_fs) _fs = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    return _fs;
+}
 
 function ilaToIls(price, currency) {
     return currency === 'ILA' ? price / 100 : price;
@@ -118,6 +125,12 @@ export async function fetchHistoricalExchangeRate(fromCurrency, dateStr) {
 }
 
 export async function fetchPrices(silent) {
+    if (_fetchInProgress) return;
+    _fetchInProgress = true;
+    try { await _fetchPricesInner(silent); } finally { _fetchInProgress = false; }
+}
+
+async function _fetchPricesInner(silent) {
     const investments = store.get('investments') || [];
     const tickers = [...new Set(
         investments
@@ -155,8 +168,8 @@ export async function fetchPrices(silent) {
         .filter(c => c && c !== 'ILS');
     const uniqueCurrencies = [...new Set([...currencies.values(), ...investmentCurrencies])].filter(c => c !== 'ILS');
     console.log('[price-service] fetchPrices — currencies to fetch rates for:', uniqueCurrencies);
-    const exchangeRates = store.get('exchangeRates') || { ILS: 1 };
-    exchangeRates.ILS = 1;
+    const prevRates = store.get('exchangeRates') || {};
+    const exchangeRates = { ...prevRates, ILS: 1 };
     await Promise.all(uniqueCurrencies.map(async (currency) => {
         const rate = await fetchExchangeRate(currency);
         console.log(`[price-service] exchange rate ${currency}→ILS:`, rate);
@@ -186,7 +199,7 @@ export async function fetchPrices(silent) {
 }
 
 async function savePriceCache(familyId, priceMap, currencyMap, exchangeRates) {
-    const { doc, setDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+    const { doc, setDoc } = await fs();
     const db = getAppDb();
 
     const pricesObj = {};
@@ -208,7 +221,7 @@ async function savePriceCache(familyId, priceMap, currencyMap, exchangeRates) {
 // Loads cached exchange rates (and last update timestamp) from Firestore on startup
 export async function loadPriceCache(familyId) {
     try {
-        const { doc, getDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
+        const { doc, getDoc } = await fs();
         const db = getAppDb();
         const snap = await getDoc(doc(db, 'families', familyId, 'prices', 'latest'));
         if (!snap.exists()) return;
@@ -225,6 +238,7 @@ export async function loadPriceCache(familyId) {
 }
 
 function _startTimer() {
+    if (priceTimer) return; // Already running
     fetchPrices(true);
     priceTimer = setInterval(() => fetchPrices(true), PRICE_REFRESH_MS);
 }

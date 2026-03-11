@@ -17,6 +17,7 @@ import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
 import { exportData, importData } from '../modals/data-transfer.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
+import { switchToMember, switchBack, isImpersonating, getParentUser } from '../../services/impersonate.js';
 
 let _container = null;
 let _unsubs = [];
@@ -47,11 +48,23 @@ export async function mount(container) {
 
     renderShell();
 
+    let _lastRole = user.role;
+    let _lastKidName = user.kidName;
+
     _unsubs.push(
         store.subscribe('kids', () => debouncedRenderShell()),
         store.subscribe('family', () => updateTitle()),
-        store.subscribe('members', () => debouncedRenderShell()),
+        store.subscribe('members', () => updateTabAvatars()),
         store.subscribe('priceLastUpdate', () => updatePriceStatus()),
+        store.subscribe('user', (u) => {
+            // Only re-render the shell when impersonation changes (role/kidName),
+            // not on every user update (e.g. token refresh)
+            if (u?.role !== _lastRole || u?.kidName !== _lastKidName) {
+                _lastRole = u?.role;
+                _lastKidName = u?.kidName;
+                debouncedRenderShell();
+            }
+        }),
     );
 }
 
@@ -80,10 +93,15 @@ function renderShell() {
     const title = family.family_name ? family.family_name + ' - Family Money' : 'Family Money';
     document.title = title;
 
+    const impersonating = isImpersonating();
+
     let visibleKids = kids;
     if (user.role === 'member') {
         visibleKids = kids.filter(k => k === user.kidName);
     }
+
+    // When impersonating, use the parent's permissions for header actions
+    const effectiveUser = isImpersonating() ? getParentUser() : user;
 
     let headerActions = '';
     const lastUpdate = store.get('priceLastUpdate');
@@ -91,12 +109,28 @@ function renderShell() {
         const d = new Date(lastUpdate);
         headerActions += `<span class="price-status">מחירים: ${d.toLocaleTimeString('he-IL')}</span>`;
     }
-    if (can(user, 'kid:create'))    headerActions += `<button id="add-kid-btn" class="btn btn-small" title="הוסף ילד/ה">+ ילד/ה</button>`;
-    if (can(user, 'member:create')) headerActions += `<button id="manage-members-btn" class="btn btn-small" title="ניהול חברי משפחה">👥 חברים</button>`;
-    if (can(user, 'settings:view')) headerActions += `<button id="settings-btn" class="btn btn-icon" title="הגדרות">⚙</button>`;
-    if (can(user, 'data:export')) {
-        headerActions += `<button id="export-btn" class="btn btn-icon" title="ייצוא נתונים">⤓</button>`;
-        headerActions += `<button id="import-btn" class="btn btn-icon" title="ייבוא נתונים">⤒</button>`;
+
+    // "View as" dropdown for managers (always visible, even while impersonating)
+    if (effectiveUser.role === 'manager' && kids.length > 0) {
+        const currentKid = impersonating ? user.kidName : '';
+        let options = `<option value="">👁 תצוגת הורה</option>`;
+        kids.forEach(kid => {
+            const sel = kid === currentKid ? ' selected' : '';
+            options += `<option value="${esc(kid)}"${sel}>👁 צפה כ-${esc(kid)}</option>`;
+        });
+        headerActions += `<select id="view-as-select" class="view-as-select" title="החלף תצוגה">${options}</select>`;
+    }
+
+    // When impersonating, hide all manager actions — show only the dropdown + logout
+    // so the parent sees exactly what the kid sees
+    if (!impersonating) {
+        if (can(effectiveUser, 'kid:create'))    headerActions += `<button id="add-kid-btn" class="btn btn-small" title="הוסף ילד/ה">+ ילד/ה</button>`;
+        if (can(effectiveUser, 'member:create')) headerActions += `<button id="manage-members-btn" class="btn btn-small" title="ניהול חברי משפחה">👥 חברים</button>`;
+        if (can(effectiveUser, 'settings:view')) headerActions += `<button id="settings-btn" class="btn btn-icon" title="הגדרות">⚙</button>`;
+        if (can(effectiveUser, 'data:export')) {
+            headerActions += `<button id="export-btn" class="btn btn-icon" title="ייצוא נתונים">⤓</button>`;
+            headerActions += `<button id="import-btn" class="btn btn-icon" title="ייבוא נתונים">⤒</button>`;
+        }
     }
     headerActions += `<button id="logout-btn" class="btn btn-icon" title="התנתק">🚪</button>`;
 
@@ -147,10 +181,11 @@ function renderShell() {
 
 function wireShellEvents() {
     const user = store.get('user');
+    const effectiveUser = isImpersonating() ? getParentUser() : user;
 
     _container.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.kid));
-        if (can(user, 'kid:rename') && btn.dataset.kid !== '__family__') {
+        if (!isImpersonating() && can(effectiveUser, 'kid:rename') && btn.dataset.kid !== '__family__') {
             btn.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 showKidContextMenu(btn.dataset.kid, {
@@ -185,6 +220,7 @@ function wireShellEvents() {
     const logoutBtn = _container.querySelector('#logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
+            if (isImpersonating()) switchBack();
             const { logout } = await import('../../services/auth-service.js');
             logout();
         });
@@ -192,6 +228,20 @@ function wireShellEvents() {
 
     const emptyAddBtn = _container.querySelector('#empty-add-member-btn');
     if (emptyAddBtn) emptyAddBtn.addEventListener('click', showAddMemberModal);
+
+    // Impersonation: "view as" dropdown
+    const viewAsSelect = _container.querySelector('#view-as-select');
+    if (viewAsSelect) {
+        viewAsSelect.addEventListener('change', () => {
+            const kidName = viewAsSelect.value;
+            if (kidName) {
+                if (isImpersonating()) switchBack();
+                switchToMember(kidName);
+            } else {
+                switchBack();
+            }
+        });
+    }
 }
 
 async function switchTab(tabId) {
@@ -234,4 +284,17 @@ function updateTitle() {
         titleEl.textContent = title;
         document.title = title;
     }
+}
+
+function updateTabAvatars() {
+    if (!_container) return;
+    const members = store.get('members') || [];
+    _container.querySelectorAll('.tab-btn[data-kid]').forEach(btn => {
+        const kidName = btn.dataset.kid;
+        if (kidName === '__family__') return;
+        const member = members.find(m => m.name === kidName);
+        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        const avatarEl = btn.querySelector('.tab-avatar');
+        if (avatarEl) avatarEl.innerHTML = renderAvatar(avatarCfg, 28);
+    });
 }

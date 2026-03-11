@@ -10,9 +10,10 @@ export const DEFAULT_AVATAR = {
     hair: 'short',
     hairColor: '#4A3728',
     eyes: 'happy',
+    eyeColor: '#5D4037',
     eyebrows: 'normal',
     mouth: 'smile',
-    accessory: 'none',
+    accessories: [],
     glasses: 'none',
     freckles: false,
     bgColor: '#E8DAEF',
@@ -20,6 +21,11 @@ export const DEFAULT_AVATAR = {
 
 export const SKIN_COLORS = [
     '#FDEBD3', '#F8D5B4', '#E8B98A', '#D4956B', '#A0674B', '#6B4226',
+];
+
+export const EYE_COLORS = [
+    '#5D4037', '#2d3436', '#1565C0', '#2E7D32', '#6A1B9A',
+    '#BF360C', '#00838F', '#F57F17', '#AD1457',
 ];
 
 export const HAIR_COLORS = [
@@ -42,9 +48,7 @@ function headShape(skin, shape) {
         case 'square':
             return `<rect x="24" y="22" width="72" height="80" rx="22" fill="${skin}" />`;
         case 'heart':
-            return `
-                <path d="M60 104 Q24 80 24 50 Q24 24 42 22 Q52 20 60 32 Q68 20 78 22 Q96 24 96 50 Q96 80 60 104Z" fill="${skin}"/>
-            `;
+            return `<path d="M60 104 Q24 80 24 50 Q24 24 42 22 Q52 20 60 32 Q68 20 78 22 Q96 24 96 50 Q96 80 60 104Z" fill="${skin}"/>`;
         case 'round':
         default:
             return `<ellipse cx="60" cy="62" rx="38" ry="42" fill="${skin}" />`;
@@ -97,28 +101,32 @@ function eyebrowsPart(type) {
     }
 }
 
-function eyesPart(type) {
+function eyesPart(type, eyeColor) {
     const left = { cx: 45, cy: 56 };
     const right = { cx: 75, cy: 56 };
+    const ec = eyeColor || '#5D4037';
 
     switch (type) {
         case 'happy':
             return `
-                <path d="M${left.cx - 7} ${left.cy} Q${left.cx} ${left.cy - 8} ${left.cx + 7} ${left.cy}" fill="none" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M${right.cx - 7} ${right.cy} Q${right.cx} ${right.cy - 8} ${right.cx + 7} ${right.cy}" fill="none" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M${left.cx - 7} ${left.cy} Q${left.cx} ${left.cy - 8} ${left.cx + 7} ${left.cy}" fill="none" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M${right.cx - 7} ${right.cy} Q${right.cx} ${right.cy - 8} ${right.cx + 7} ${right.cy}" fill="none" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
             `;
         case 'round':
             return `
-                <circle cx="${left.cx}" cy="${left.cy}" r="5" fill="#2d3436"/>
-                <circle cx="${right.cx}" cy="${right.cy}" r="5" fill="#2d3436"/>
-                <circle cx="${left.cx + 1.5}" cy="${left.cy - 1.5}" r="1.8" fill="white"/>
-                <circle cx="${right.cx + 1.5}" cy="${right.cy - 1.5}" r="1.8" fill="white"/>
+                <circle cx="${left.cx}" cy="${left.cy}" r="6" fill="white" stroke="#b2bec3" stroke-width="0.5"/>
+                <circle cx="${left.cx + 1}" cy="${left.cy}" r="3.5" fill="${ec}"/>
+                <circle cx="${left.cx + 2}" cy="${left.cy - 1.5}" r="1.5" fill="white"/>
+                <circle cx="${right.cx}" cy="${right.cy}" r="6" fill="white" stroke="#b2bec3" stroke-width="0.5"/>
+                <circle cx="${right.cx + 1}" cy="${right.cy}" r="3.5" fill="${ec}"/>
+                <circle cx="${right.cx + 2}" cy="${right.cy - 1.5}" r="1.5" fill="white"/>
             `;
         case 'wink':
             return `
-                <circle cx="${left.cx}" cy="${left.cy}" r="5" fill="#2d3436"/>
-                <circle cx="${left.cx + 1.5}" cy="${left.cy - 1.5}" r="1.8" fill="white"/>
-                <path d="M${right.cx - 7} ${right.cy} Q${right.cx} ${right.cy - 8} ${right.cx + 7} ${right.cy}" fill="none" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="${left.cx}" cy="${left.cy}" r="6" fill="white" stroke="#b2bec3" stroke-width="0.5"/>
+                <circle cx="${left.cx + 1}" cy="${left.cy}" r="3.5" fill="${ec}"/>
+                <circle cx="${left.cx + 2}" cy="${left.cy - 1.5}" r="1.5" fill="white"/>
+                <path d="M${right.cx - 7} ${right.cy} Q${right.cx} ${right.cy - 8} ${right.cx + 7} ${right.cy}" fill="none" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
             `;
         case 'cool':
             return `
@@ -132,17 +140,17 @@ function eyesPart(type) {
             `;
         case 'big':
             return `
-                <ellipse cx="${left.cx}" cy="${left.cy}" rx="7" ry="8" fill="white" stroke="#2d3436" stroke-width="1.5"/>
-                <circle cx="${left.cx + 1}" cy="${left.cy + 1}" r="4" fill="#2d3436"/>
-                <circle cx="${left.cx + 2.5}" cy="${left.cy - 1}" r="1.5" fill="white"/>
-                <ellipse cx="${right.cx}" cy="${right.cy}" rx="7" ry="8" fill="white" stroke="#2d3436" stroke-width="1.5"/>
-                <circle cx="${right.cx + 1}" cy="${right.cy + 1}" r="4" fill="#2d3436"/>
-                <circle cx="${right.cx + 2.5}" cy="${right.cy - 1}" r="1.5" fill="white"/>
+                <ellipse cx="${left.cx}" cy="${left.cy}" rx="8" ry="9" fill="white" stroke="#b2bec3" stroke-width="0.8"/>
+                <circle cx="${left.cx + 1}" cy="${left.cy + 1}" r="5" fill="${ec}"/>
+                <circle cx="${left.cx + 2.5}" cy="${left.cy - 1}" r="2" fill="white"/>
+                <ellipse cx="${right.cx}" cy="${right.cy}" rx="8" ry="9" fill="white" stroke="#b2bec3" stroke-width="0.8"/>
+                <circle cx="${right.cx + 1}" cy="${right.cy + 1}" r="5" fill="${ec}"/>
+                <circle cx="${right.cx + 2.5}" cy="${right.cy - 1}" r="2" fill="white"/>
             `;
         case 'sleepy':
             return `
-                <path d="M${left.cx - 7} ${left.cy + 2} Q${left.cx} ${left.cy - 3} ${left.cx + 7} ${left.cy + 2}" fill="none" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M${right.cx - 7} ${right.cy + 2} Q${right.cx} ${right.cy - 3} ${right.cx + 7} ${right.cy + 2}" fill="none" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M${left.cx - 7} ${left.cy + 2} Q${left.cx} ${left.cy - 3} ${left.cx + 7} ${left.cy + 2}" fill="none" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M${right.cx - 7} ${right.cy + 2} Q${right.cx} ${right.cy - 3} ${right.cx + 7} ${right.cy + 2}" fill="none" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
             `;
         case 'heart':
             return `
@@ -164,30 +172,32 @@ function eyesPart(type) {
             `;
         case 'lashes':
             return `
-                <circle cx="${left.cx}" cy="${left.cy}" r="5" fill="#2d3436"/>
-                <circle cx="${right.cx}" cy="${right.cy}" r="5" fill="#2d3436"/>
-                <circle cx="${left.cx + 1.5}" cy="${left.cy - 1.5}" r="1.8" fill="white"/>
-                <circle cx="${right.cx + 1.5}" cy="${right.cy - 1.5}" r="1.8" fill="white"/>
-                <line x1="${left.cx - 4}" y1="${left.cy - 5}" x2="${left.cx - 6}" y2="${left.cy - 9}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="${left.cx}" y1="${left.cy - 6}" x2="${left.cx}" y2="${left.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="${left.cx + 4}" y1="${left.cy - 5}" x2="${left.cx + 6}" y2="${left.cy - 9}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="${right.cx - 4}" y1="${right.cy - 5}" x2="${right.cx - 6}" y2="${right.cy - 9}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="${right.cx}" y1="${right.cy - 6}" x2="${right.cx}" y2="${right.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="${right.cx + 4}" y1="${right.cy - 5}" x2="${right.cx + 6}" y2="${right.cy - 9}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="${left.cx}" cy="${left.cy}" r="6" fill="white" stroke="#b2bec3" stroke-width="0.5"/>
+                <circle cx="${left.cx + 1}" cy="${left.cy}" r="3.5" fill="${ec}"/>
+                <circle cx="${left.cx + 2}" cy="${left.cy - 1.5}" r="1.5" fill="white"/>
+                <line x1="${left.cx - 4}" y1="${left.cy - 6}" x2="${left.cx - 6}" y2="${left.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="${left.cx}" y1="${left.cy - 7}" x2="${left.cx}" y2="${left.cy - 11}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="${left.cx + 4}" y1="${left.cy - 6}" x2="${left.cx + 6}" y2="${left.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="${right.cx}" cy="${right.cy}" r="6" fill="white" stroke="#b2bec3" stroke-width="0.5"/>
+                <circle cx="${right.cx + 1}" cy="${right.cy}" r="3.5" fill="${ec}"/>
+                <circle cx="${right.cx + 2}" cy="${right.cy - 1.5}" r="1.5" fill="white"/>
+                <line x1="${right.cx - 4}" y1="${right.cy - 6}" x2="${right.cx - 6}" y2="${right.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="${right.cx}" y1="${right.cy - 7}" x2="${right.cx}" y2="${right.cy - 11}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="${right.cx + 4}" y1="${right.cy - 6}" x2="${right.cx + 6}" y2="${right.cy - 10}" stroke="#2d3436" stroke-width="1.5" stroke-linecap="round"/>
             `;
         case 'dizzy':
             return `
                 <g transform="translate(${left.cx}, ${left.cy})">
-                    <line x1="-5" y1="-5" x2="5" y2="5" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
-                    <line x1="5" y1="-5" x2="-5" y2="5" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
+                    <line x1="-5" y1="-5" x2="5" y2="5" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
+                    <line x1="5" y1="-5" x2="-5" y2="5" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
                 </g>
                 <g transform="translate(${right.cx}, ${right.cy})">
-                    <line x1="-5" y1="-5" x2="5" y2="5" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
-                    <line x1="5" y1="-5" x2="-5" y2="5" stroke="#2d3436" stroke-width="2.5" stroke-linecap="round"/>
+                    <line x1="-5" y1="-5" x2="5" y2="5" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
+                    <line x1="5" y1="-5" x2="-5" y2="5" stroke="${ec}" stroke-width="2.5" stroke-linecap="round"/>
                 </g>
             `;
         default:
-            return eyesPart('happy');
+            return eyesPart('happy', eyeColor);
     }
 }
 
@@ -275,11 +285,55 @@ function mouthPart(type) {
     }
 }
 
+// Hair behind head (drawn before face for styles that flow behind)
+function hairBehind(type, color) {
+    switch (type) {
+        case 'long':
+            return `
+                <path d="M20 46 Q16 56 18 90 Q19 98 24 96 L25 52Z" fill="${color}" opacity="0.85"/>
+                <path d="M100 46 Q104 56 102 90 Q101 98 96 96 L95 52Z" fill="${color}" opacity="0.85"/>
+            `;
+        case 'ponytail':
+            return `
+                <path d="M26 36 Q16 34 14 48 Q12 62 16 78 Q18 86 24 82 Q20 66 22 50 Q23 40 26 36Z" fill="${color}" opacity="0.8"/>
+                <circle cx="18" cy="84" r="9" fill="${color}" opacity="0.85"/>
+                <circle cx="16" cy="76" r="6" fill="${color}" opacity="0.8"/>
+            `;
+        case 'pigtails':
+            return `
+                <path d="M24 38 Q14 42 10 56 Q8 70 14 82" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+                <circle cx="14" cy="84" r="9" fill="${color}" opacity="0.85"/>
+                <circle cx="12" cy="76" r="6" fill="${color}" opacity="0.8"/>
+                <path d="M96 38 Q106 42 110 56 Q112 70 106 82" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+                <circle cx="106" cy="84" r="9" fill="${color}" opacity="0.85"/>
+                <circle cx="108" cy="76" r="6" fill="${color}" opacity="0.8"/>
+            `;
+        case 'wavy':
+            return `
+                <path d="M20 46 Q14 58 16 74 Q18 82 22 78 Q20 66 22 52Z" fill="${color}" opacity="0.8"/>
+                <path d="M100 46 Q106 58 104 74 Q102 82 98 78 Q100 66 98 52Z" fill="${color}" opacity="0.8"/>
+            `;
+        case 'curly':
+            return `
+                <circle cx="18" cy="56" r="7" fill="${color}" opacity="0.7"/>
+                <circle cx="16" cy="66" r="6" fill="${color}" opacity="0.65"/>
+                <circle cx="102" cy="56" r="7" fill="${color}" opacity="0.7"/>
+                <circle cx="104" cy="66" r="6" fill="${color}" opacity="0.65"/>
+            `;
+        case 'afro':
+            return `<circle cx="60" cy="42" r="46" fill="${color}" opacity="0.3"/>`;
+        default:
+            return '';
+    }
+}
+
 function hairPart(type, color) {
     switch (type) {
         case 'short':
             return `
                 <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
+                <path d="M24 48 Q22 52 22 56" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+                <path d="M96 48 Q98 52 98 56" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
             `;
         case 'spiky':
             return `
@@ -295,28 +349,26 @@ function hairPart(type, color) {
                 <circle cx="48" cy="16" r="6" fill="${color}"/>
                 <circle cx="72" cy="16" r="6" fill="${color}"/>
                 <circle cx="60" cy="13" r="6" fill="${color}"/>
-                <circle cx="22" cy="50" r="6" fill="${color}"/>
-                <circle cx="98" cy="50" r="6" fill="${color}"/>
+                <circle cx="20" cy="50" r="7" fill="${color}"/>
+                <circle cx="100" cy="50" r="7" fill="${color}"/>
+                <circle cx="18" cy="60" r="5" fill="${color}" opacity="0.8"/>
+                <circle cx="102" cy="60" r="5" fill="${color}" opacity="0.8"/>
             `;
         case 'long':
             return `
-                <path d="M22 50 Q18 30 30 18 Q45 8 60 8 Q75 8 90 18 Q102 30 98 50 L100 90 Q98 95 94 90 L95 50 Q90 32 75 22 Q60 16 45 22 Q30 32 25 50 L26 90 Q22 95 20 90 Z" fill="${color}"/>
+                <path d="M22 46 Q18 26 32 16 Q46 6 60 6 Q74 6 88 16 Q102 26 98 46" fill="${color}"/>
+                <path d="M22 46 L20 92 Q19 98 24 96 L26 52 Q28 36 42 24 Q55 16 60 16 Q65 16 78 24 Q92 36 94 52 L96 96 Q101 98 100 92 L98 46" fill="${color}" opacity="0.9"/>
             `;
         case 'ponytail':
             return `
                 <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
-                <path d="M30 28 Q20 20 22 40 Q24 58 30 70 Q32 58 30 28Z" fill="${color}"/>
-                <circle cx="24" cy="72" r="8" fill="${color}"/>
+                <path d="M24 42 Q22 48 22 54" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
             `;
         case 'pigtails':
             return `
                 <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
-                <path d="M26 40 Q18 44 16 56 Q14 68 20 76" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
-                <circle cx="20" cy="78" r="7" fill="${color}"/>
-                <circle cx="18" cy="72" r="5" fill="${color}"/>
-                <path d="M94 40 Q102 44 104 56 Q106 68 100 76" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
-                <circle cx="100" cy="78" r="7" fill="${color}"/>
-                <circle cx="102" cy="72" r="5" fill="${color}"/>
+                <path d="M24 42 Q22 48 22 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+                <path d="M96 42 Q98 48 98 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
             `;
         case 'buzz':
             return `
@@ -330,25 +382,46 @@ function hairPart(type, color) {
         case 'bun':
             return `
                 <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
-                <circle cx="60" cy="12" r="12" fill="${color}"/>
+                <circle cx="60" cy="10" r="13" fill="${color}"/>
+                <ellipse cx="60" cy="10" rx="8" ry="8" fill="${color}" opacity="0.6"/>
+                <path d="M24 42 Q22 48 22 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+                <path d="M96 42 Q98 48 98 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
             `;
         case 'afro':
             return `
-                <circle cx="60" cy="38" r="42" fill="${color}"/>
-                <circle cx="60" cy="62" rx="38" ry="42" fill="${color}" opacity="0"/>
+                <circle cx="60" cy="38" r="44" fill="${color}"/>
             `;
         case 'sidepart':
             return `
                 <path d="M22 48 Q22 24 40 16 Q55 10 60 12 Q58 18 45 24 Q30 32 28 50Z" fill="${color}"/>
                 <path d="M60 12 Q80 10 92 22 Q100 32 98 48 Q94 30 78 22 Q65 16 60 12Z" fill="${color}" opacity="0.8"/>
+                <path d="M22 48 Q20 56 20 64" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
             `;
         case 'wavy':
             return `
-                <path d="M22 50 Q18 28 35 16 Q50 8 60 10 Q70 8 85 16 Q102 28 98 50" fill="${color}"/>
-                <path d="M22 50 Q16 60 20 72 Q22 60 26 52Z" fill="${color}"/>
-                <path d="M98 50 Q104 60 100 72 Q98 60 94 52Z" fill="${color}"/>
-                <path d="M26 44 Q22 56 24 66" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
-                <path d="M94 44 Q98 56 96 66" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
+                <path d="M22 46 Q18 26 36 14 Q50 6 60 8 Q70 6 84 14 Q102 26 98 46" fill="${color}"/>
+                <path d="M22 46 Q18 56 20 68 Q22 60 24 50Z" fill="${color}" opacity="0.8"/>
+                <path d="M98 46 Q102 56 100 68 Q98 60 96 50Z" fill="${color}" opacity="0.8"/>
+                <path d="M24 42 Q20 54 22 70" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+                <path d="M96 42 Q100 54 98 70" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+            `;
+        case 'braids':
+            return `
+                <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
+                <path d="M26 40 Q18 42 16 52 Q14 62 16 72 Q18 80 22 84" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="22" cy="86" r="4" fill="${color}"/>
+                <path d="M16 52 L20 56 M14 62 L18 66 M16 72 L20 76" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.4"/>
+                <path d="M94 40 Q102 42 104 52 Q106 62 104 72 Q102 80 98 84" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="98" cy="86" r="4" fill="${color}"/>
+                <path d="M104 52 L100 56 M106 62 L102 66 M104 72 L100 76" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.4"/>
+            `;
+        case 'curtain':
+            return `
+                <path d="M22 50 Q20 30 34 18 Q48 8 60 10 Q72 8 86 18 Q100 30 98 50" fill="${color}"/>
+                <path d="M42 14 Q36 24 28 44 Q26 48 24 54" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+                <path d="M78 14 Q84 24 92 44 Q94 48 96 54" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+                <path d="M60 10 Q56 14 50 22" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+                <path d="M60 10 Q64 14 70 22" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
             `;
         case 'none':
             return '';
@@ -359,8 +432,6 @@ function hairPart(type, color) {
 
 function accessoryPart(type) {
     switch (type) {
-        case 'none':
-            return '';
         case 'hat':
             return `
                 <path d="M28 32 Q30 8 60 4 Q90 8 92 32 Z" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
@@ -430,6 +501,32 @@ function accessoryPart(type) {
                 <path d="M24 44 Q30 36 60 32 Q90 36 96 44" fill="#d35400" />
                 <circle cx="60" cy="32" r="2" fill="#f39c12"/>
             `;
+        case 'tiara':
+            return `
+                <path d="M36 34 Q38 26 44 28 Q48 22 52 28 Q56 20 60 26 Q64 20 68 28 Q72 22 76 28 Q82 26 84 34" fill="none" stroke="#F1C40F" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="60" cy="22" r="3" fill="#E91E63" opacity="0.8"/>
+                <circle cx="50" cy="26" r="2" fill="#F1C40F"/>
+                <circle cx="70" cy="26" r="2" fill="#F1C40F"/>
+            `;
+        case 'butterfly':
+            return `
+                <g transform="translate(86, 26) rotate(-10)">
+                    <ellipse cx="-5" cy="-3" rx="5" ry="7" fill="#AB47BC" opacity="0.7" transform="rotate(-20)"/>
+                    <ellipse cx="5" cy="-3" rx="5" ry="7" fill="#CE93D8" opacity="0.7" transform="rotate(20)"/>
+                    <ellipse cx="-3" cy="3" rx="3" ry="5" fill="#AB47BC" opacity="0.5" transform="rotate(-10)"/>
+                    <ellipse cx="3" cy="3" rx="3" ry="5" fill="#CE93D8" opacity="0.5" transform="rotate(10)"/>
+                    <ellipse cx="0" cy="0" rx="1" ry="4" fill="#4A148C" opacity="0.6"/>
+                </g>
+            `;
+        case 'hearts':
+            return `
+                <g transform="translate(84, 26) scale(0.5)">
+                    <path d="M0 6 Q-10 -8 -6 -10 Q-2 -12 0 -6 Q2 -12 6 -10 Q10 -8 0 6Z" fill="#e74c3c" opacity="0.8"/>
+                </g>
+                <g transform="translate(36, 28) scale(0.4)">
+                    <path d="M0 6 Q-10 -8 -6 -10 Q-2 -12 0 -6 Q2 -12 6 -10 Q10 -8 0 6Z" fill="#e74c3c" opacity="0.6"/>
+                </g>
+            `;
         default:
             return '';
     }
@@ -460,25 +557,34 @@ function nose() {
     return `<ellipse cx="60" cy="66" rx="2.5" ry="2" fill="#00000010"/>`;
 }
 
+// Normalize legacy single-accessory configs to array
+function normalizeAccessories(config) {
+    if (config.accessories && Array.isArray(config.accessories)) return config.accessories;
+    if (config.accessory && config.accessory !== 'none') return [config.accessory];
+    return [];
+}
+
 // ---- Main Render Function ----
 
 export function renderAvatar(config = {}, size = 48) {
     const c = { ...DEFAULT_AVATAR, ...config };
+    const accs = normalizeAccessories(c);
 
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="${size}" height="${size}">
     <circle cx="60" cy="60" r="58" fill="${c.bgColor}"/>
+    ${hairBehind(c.hair, c.hairColor)}
     ${ears(c.skin)}
     ${headShape(c.skin, c.faceShape)}
     ${eyebrowsPart(c.eyebrows)}
-    ${eyesPart(c.eyes)}
+    ${eyesPart(c.eyes, c.eyeColor)}
     ${glassesPart(c.glasses)}
     ${nose()}
     ${mouthPart(c.mouth)}
     ${blush()}
     ${frecklesPart(c.freckles)}
     ${hairPart(c.hair, c.hairColor)}
-    ${accessoryPart(c.accessory)}
+    ${accs.map(a => accessoryPart(a)).join('\n    ')}
 </svg>`.trim();
 
     return svg;
@@ -519,8 +625,8 @@ export const FACE_SHAPE_OPTIONS = ['round', 'oval', 'square', 'heart'];
 export const EYES_OPTIONS = ['happy', 'round', 'wink', 'cool', 'big', 'sleepy', 'heart', 'stars', 'lashes', 'dizzy'];
 export const EYEBROW_OPTIONS = ['normal', 'raised', 'angry', 'thick', 'worried', 'none'];
 export const MOUTH_OPTIONS = ['smile', 'grin', 'tongue', 'neutral', 'surprised', 'cat', 'kiss', 'teeth', 'smirk', 'fangs'];
-export const HAIR_OPTIONS = ['short', 'spiky', 'curly', 'long', 'ponytail', 'pigtails', 'buzz', 'mohawk', 'bun', 'afro', 'sidepart', 'wavy', 'none'];
-export const ACCESSORY_OPTIONS = ['none', 'hat', 'crown', 'bow', 'headband', 'flower', 'star', 'cap', 'beanie', 'earrings', 'bandana'];
+export const HAIR_OPTIONS = ['short', 'spiky', 'curly', 'long', 'ponytail', 'pigtails', 'buzz', 'mohawk', 'bun', 'afro', 'sidepart', 'wavy', 'braids', 'curtain', 'none'];
+export const ACCESSORY_OPTIONS = ['hat', 'crown', 'bow', 'headband', 'flower', 'star', 'cap', 'beanie', 'earrings', 'bandana', 'tiara', 'butterfly', 'hearts'];
 export const GLASSES_OPTIONS = ['none', 'round', 'square', 'cat-eye'];
 
 // Labels (Hebrew)
@@ -530,9 +636,10 @@ export const LABELS = {
     hair: 'תסרוקת',
     hairColor: 'צבע שיער',
     eyes: 'עיניים',
+    eyeColor: 'צבע עיניים',
     eyebrows: 'גבות',
     mouth: 'פה',
-    accessory: 'אביזר',
+    accessories: 'אביזרים',
     glasses: 'משקפיים',
     freckles: 'נמשים',
     bgColor: 'רקע',
@@ -555,11 +662,13 @@ export const MOUTH_LABELS = {
 export const HAIR_LABELS = {
     short: 'קצר', spiky: 'סוער', curly: 'מתולתל', long: 'ארוך',
     ponytail: 'קוקו', pigtails: 'צמות', buzz: 'מגולח', mohawk: 'מוהיקן',
-    bun: 'גולגול', afro: 'אפרו', sidepart: 'פחדן', wavy: 'גלי', none: 'ללא',
+    bun: 'גולגול', afro: 'אפרו', sidepart: 'פחדן', wavy: 'גלי',
+    braids: 'צמות קלוע', curtain: 'פוני', none: 'ללא',
 };
 export const ACCESSORY_LABELS = {
-    none: 'ללא', hat: 'כובע', crown: 'כתר', bow: 'פפיון', headband: 'סרט', flower: 'פרח', star: 'כוכב',
+    hat: 'כובע', crown: 'כתר', bow: 'פפיון', headband: 'סרט', flower: 'פרח', star: 'כוכב',
     cap: 'מצחיה', beanie: 'כיפה', earrings: 'עגילים', bandana: 'בנדנה',
+    tiara: 'נזר', butterfly: 'פרפר', hearts: 'לבבות',
 };
 export const GLASSES_LABELS = {
     none: 'ללא', round: 'עגול', square: 'מרובע', 'cat-eye': 'חתולי',

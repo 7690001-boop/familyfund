@@ -16,6 +16,7 @@ import { showGoalModal, deleteGoal } from '../modals/goal-modal.js';
 import { showSimulationModal, deleteSimulation } from '../modals/simulation-modal.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { showAvatarModal } from '../modals/avatar-modal.js';
+import { togglePrivacy } from '../../services/family-service.js';
 
 let _unsubs = [];
 let _container = null;
@@ -71,6 +72,8 @@ function renderView() {
     const matching = computeMatching(investments, family);
 
     const canEditAvatar = user.role === 'manager' || user.kidName === _kidName;
+    const isPrivate = member?.private === true;
+    const canTogglePrivacy = user.kidName === _kidName || user.role === 'manager';
 
     _container.innerHTML = `
         <section class="kid-header">
@@ -79,6 +82,12 @@ function renderView() {
                 ${canEditAvatar ? '<button class="avatar-edit-btn" id="edit-avatar-btn" title="ערוך אווטאר">✏️</button>' : ''}
             </div>
             <h2 class="kid-header-name">${_kidName}</h2>
+            ${canTogglePrivacy ? `
+                <label class="privacy-toggle" title="${isPrivate ? 'הסכומים מוסתרים מחברי משפחה אחרים' : 'הסכומים גלויים לכל המשפחה'}">
+                    <input type="checkbox" id="privacy-checkbox" ${isPrivate ? 'checked' : ''}>
+                    <span class="privacy-toggle-label">${isPrivate ? '🔒 פרטי' : '🔓 גלוי'}</span>
+                </label>
+            ` : ''}
         </section>
         <section class="summary-cards" data-slot="summary"></section>
         <section class="section" data-slot="assets"></section>
@@ -146,5 +155,14 @@ function renderView() {
     const editAvatarBtn = _container.querySelector('#edit-avatar-btn');
     if (editAvatarBtn) {
         editAvatarBtn.addEventListener('click', () => showAvatarModal(_kidName, avatarCfg));
+    }
+
+    const privacyCheckbox = _container.querySelector('#privacy-checkbox');
+    if (privacyCheckbox) {
+        privacyCheckbox.addEventListener('change', async () => {
+            const user = store.get('user');
+            if (!user?.familyId || !member?.id) return;
+            await togglePrivacy(user.familyId, member.id, privacyCheckbox.checked);
+        });
     }
 }
