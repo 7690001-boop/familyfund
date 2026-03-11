@@ -1485,6 +1485,28 @@ body::after {
         padding: 0.6rem 1rem;
     }
 
+    .kid-mode-header {
+        padding: 0.4rem 1rem !important;
+    }
+
+    .kid-mode-tabs {
+        min-height: 130px;
+        padding: 0.6rem 0.75rem 0;
+    }
+
+    .kid-identity-card {
+        padding: 0.75rem 1.75rem 0.65rem;
+    }
+
+    .kid-id-graphics {
+        gap: 1.5rem;
+    }
+
+    .coin-jar-deco {
+        width: 60px;
+        height: 68px;
+    }
+
     .header-content h1 {
         font-size: 1.2rem;
     }
@@ -2090,6 +2112,313 @@ body::after {
     margin-top: 0.3rem;
 }
 
+/* === Kid Mode Header — slim, actions only === */
+.kid-mode-header {
+    padding: 0.55rem 1.5rem !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-end;
+    background: linear-gradient(135deg, #a29bfe 0%, #fd79a8 60%, #fdcb6e 100%) !important;
+}
+
+/* === Kid Mode Tabs-nav === */
+.kid-mode-tabs {
+    display: flex;
+    align-items: flex-end;
+    min-height: 155px;
+    padding: 0.85rem 1.5rem 0;
+    gap: 0;
+    background: var(--color-surface);
+    border-bottom: 3px solid var(--color-border);
+}
+
+/* Flex wrapper that centers the identity card */
+.kid-tab-area {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    flex: 1;
+}
+
+/* === Unified Identity Card === */
+.kid-identity-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 1rem 2.75rem 0.8rem;
+    background: linear-gradient(160deg, rgba(255,255,255,0.97) 0%, rgba(243,240,255,0.92) 100%);
+    border-radius: 22px 22px 0 0;
+    border: 2px solid rgba(108,92,231,0.13);
+    border-bottom: 4px solid transparent;
+    box-shadow:
+        0 -4px 22px rgba(108,92,231,0.08),
+        0 2px 10px rgba(0,0,0,0.04),
+        inset 0 1px 0 rgba(255,255,255,1);
+    cursor: default;
+    transition: border-bottom-color 0.25s, box-shadow 0.25s;
+    animation: pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kid-identity-card.active {
+    border-bottom-color: var(--color-tab-active);
+    box-shadow:
+        0 -4px 28px rgba(108,92,231,0.14),
+        0 2px 14px rgba(108,92,231,0.08),
+        inset 0 1px 0 rgba(255,255,255,1);
+}
+
+/* The two graphical elements side by side */
+.kid-id-graphics {
+    display: flex;
+    align-items: flex-end;
+    gap: 2.25rem;
+}
+
+/* === Jar within the identity card === */
+.kid-id-jar {
+    position: relative;
+    cursor: pointer;
+    border-radius: 14px;
+    padding: 0.3rem 0.5rem 0.2rem;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.kid-id-jar:hover {
+    background: rgba(253,203,110,0.18);
+    transform: translateY(-3px);
+}
+
+/* === Coin Jar Decoration === */
+.coin-jar-deco {
+    position: relative;
+    width: 74px;
+    height: 84px;
+}
+
+.coin-jar-deco > svg {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: jar-rock 5s ease-in-out infinite;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18));
+}
+
+@keyframes jar-rock {
+    0%, 78%, 100% { transform: translateX(-50%) rotate(0deg); }
+    82%  { transform: translateX(-50%) rotate(-11deg); }
+    90%  { transform: translateX(-50%) rotate(9deg); }
+    95%  { transform: translateX(-50%) rotate(-4deg); }
+}
+
+.drop-coin {
+    font-size: 1.1rem;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    opacity: 0;
+    animation: coin-drop-in 2.6s ease-in infinite;
+    pointer-events: none;
+}
+
+.drop-coin.c1 { left: 22%; animation-delay: 0s; }
+.drop-coin.c2 { left: 50%; animation-delay: 0.87s; }
+.drop-coin.c3 { left: 78%; animation-delay: 1.74s; }
+
+@keyframes coin-drop-in {
+    0%   { top: -14px; opacity: 1; transform: translateX(-50%) scale(1) rotate(0deg); }
+    62%  { top: 34px;  opacity: 0.7; transform: translateX(-50%) scale(0.75) rotate(200deg); }
+    82%  { top: 50px;  opacity: 0; transform: translateX(-50%) scale(0.4) rotate(280deg); }
+    100% { top: 50px;  opacity: 0; }
+}
+
+/* === Avatar within the identity card === */
+.kid-id-avatar {
+    position: relative;
+    cursor: pointer;
+    border-radius: 50%;
+    animation: kid-id-float 3.5s ease-in-out infinite;
+    transition: transform 0.2s ease;
+}
+
+.kid-id-avatar:hover {
+    transform: scale(1.08);
+    animation-play-state: paused;
+}
+
+.kid-id-avatar svg {
+    border-radius: 50%;
+    box-shadow:
+        0 0 0 3px rgba(108,92,231,0.2),
+        0 6px 22px rgba(0,0,0,0.12);
+    transition: box-shadow 0.25s;
+    display: block;
+}
+
+.kid-identity-card.active .kid-id-avatar svg {
+    box-shadow:
+        0 0 0 4px var(--color-tab-active),
+        0 8px 26px rgba(108,92,231,0.28);
+}
+
+/* Sparkles on the avatar */
+.kid-id-avatar::before,
+.kid-id-avatar::after {
+    content: '✨';
+    position: absolute;
+    font-size: 1rem;
+    pointer-events: none;
+    animation: sparkle-spin 4s ease-in-out infinite;
+}
+.kid-id-avatar::before { top: -6px; right: -6px; animation-delay: 0s; }
+.kid-id-avatar::after  { bottom: 2px; left: -8px; animation-delay: 2.1s; }
+
+@keyframes kid-id-float {
+    0%, 100% { transform: translateY(0); }
+    45%  { transform: translateY(-7px); }
+}
+
+@keyframes sparkle-spin {
+    0%, 100% { opacity: 0.7; transform: scale(1) rotate(0deg); }
+    50%       { opacity: 1;   transform: scale(1.3) rotate(20deg); }
+}
+
+/* === Shared edit FAB (appears on hover over jar or avatar) === */
+.kid-id-edit-fab {
+    position: absolute;
+    bottom: -3px;
+    left: -5px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--color-surface);
+    background: var(--color-accent2);
+    color: white;
+    font-size: 0.65rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 2px 8px rgba(108,92,231,0.4);
+    z-index: 2;
+}
+
+.kid-id-jar:hover .kid-id-edit-fab,
+.kid-id-avatar:hover .kid-id-edit-fab {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Kid name below the graphics */
+.kid-id-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: 0.02em;
+}
+
+/* Family tab — pushed to far side, vertically centered */
+.kid-mode-tabs .tab-btn-family {
+    margin-inline-start: auto;
+    align-self: center;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    opacity: 0.72;
+    border-radius: 12px;
+    border-bottom: 4px solid transparent;
+}
+
+.kid-mode-tabs .tab-btn-family:hover {
+    opacity: 1;
+    background: var(--color-tab-hover);
+    color: var(--color-accent2);
+}
+
+.kid-mode-tabs .tab-btn-family.active {
+    opacity: 1;
+    color: var(--color-tab-active);
+    border-bottom-color: var(--color-tab-active);
+    background: linear-gradient(to bottom, rgba(108,92,231,0.08), transparent);
+}
+
+/* === Jar Picker Modal === */
+.jar-modal-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0 1.25rem;
+    animation: pop-in 0.4s ease-out;
+}
+
+.jar-big-preview {
+    filter: drop-shadow(0 6px 16px rgba(0,0,0,0.15));
+}
+
+.jar-big-preview-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.jar-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+    padding: 0 0 1rem;
+}
+
+.jar-option-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.7rem 0.9rem 0.6rem;
+    background: var(--color-bg);
+    border: 3px solid var(--color-border);
+    border-radius: 16px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    min-width: 86px;
+}
+
+.jar-option-btn:hover {
+    border-color: var(--color-accent2);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+}
+
+.jar-option-btn.active {
+    border-color: var(--color-tab-active);
+    background: rgba(108,92,231,0.07);
+    box-shadow: 0 0 0 3px rgba(108,92,231,0.15), var(--shadow);
+    transform: translateY(-2px);
+}
+
+.jar-option-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* === Kid view: hide duplicate avatar/name when member is logged in === */
+.kid-header.member-mode .kid-avatar-display,
+.kid-header.member-mode .kid-header-name {
+    display: none;
+}
+
+.kid-header.member-mode {
+    padding: 0.5rem 0;
+    min-height: unset;
+}
+
 /* Privacy Toggle */
 .privacy-toggle {
     display: flex;
@@ -2268,6 +2597,17 @@ body::after {
     color: var(--color-text-muted);
     opacity: 0.8;
 }
+
+.avatar-save-status {
+    font-size: 0.85rem;
+    margin-left: auto;
+    margin-right: 0.5rem;
+    align-self: center;
+    transition: opacity 0.3s;
+}
+.avatar-save-status.saving { color: var(--color-text-muted); }
+.avatar-save-status.saved  { color: var(--color-success, #22c55e); }
+.avatar-save-status.error  { color: var(--color-danger, #ef4444); }
 
 .avatar-multi-btn.active {
     background: var(--color-accent2);

@@ -6,6 +6,7 @@
 //   GET  /globes/price?symbol=5137690          — Israeli mutual fund price via Globes API
 //   GET  /globes/search?q=מיטב                — search Israeli funds by name/number
 //   GET  /globes/history?symbol=5137690&date=2025-03-06 — historical NAV
+//   POST /login             { email, password }                         — rate-limited auth proxy
 //   POST /reset-password   { memberUid, newPassword }  Authorization: Bearer <idToken>
 //
 // Required Cloudflare secrets (set via: wrangler secret put NAME):
@@ -14,6 +15,9 @@
 //   FIREBASE_API_KEY        — Firebase Web API key
 //   FIREBASE_PROJECT_ID     — Firebase project ID
 //   ALLOWED_ORIGIN          — allowed CORS origin (e.g. https://your-app.web.app)
+//
+// Required KV namespace binding (wrangler.toml):
+//   RATE_LIMIT              — KV namespace for brute-force rate limiting
 //
 // View live logs: wrangler tail
 
@@ -39,6 +43,12 @@ export default {
         if (method === 'OPTIONS') {
             console.log('→ preflight OK');
             return corsResponse(null, 204, origin, allowedOrigin);
+        }
+
+        // Login — POST only (rate-limited)
+        if (url.pathname === '/login') {
+            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
+            return handleLogin(request, env, origin, allowedOrigin);
         }
 
         // Password reset — POST only
@@ -183,6 +193,145 @@ async function handleGlobesHistory(url, origin, allowedOrigin) {
     }
 }
 
+// ─── Login Handler with Brute-Force Rate Limiting ────────────────────────────
+//
+// Tracks failed attempts per IP in KV.
+// After MAX_ATTEMPTS failures the IP is locked with exponential backoff:
+//   attempt 11 → 1 min, 12 → 2 min, 13 → 4 min … capped at 30 min.
+// A successful login resets the counter.
+
+const MAX_ATTEMPTS  = 10;
+const MAX_BACKOFF_S = 30 * 60; // 30 minutes
+
+function calcBackoffSeconds(failCount) {
+    if (failCount <= MAX_ATTEMPTS) return 0;
+    const extra = failCount - MAX_ATTEMPTS; // 1, 2, 3 …
+    return Math.min(Math.pow(2, extra - 1) * 60, MAX_BACKOFF_S);
+}
+
+async function handleLogin(request, env, origin, allowedOrigin) {
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rlKey = `rl:${ip}`;
+
+    // ── Rate-limit check ──
+    if (env.RATE_LIMIT) {
+        const rlData = await env.RATE_LIMIT.get(rlKey, 'json') || { failCount: 0, lockedUntil: 0 };
+        const nowMs = Date.now();
+
+        if (rlData.lockedUntil > nowMs) {
+            const retryAfter = Math.ceil((rlData.lockedUntil - nowMs) / 1000);
+            console.log(`→ login blocked: ip=${ip}, retryAfter=${retryAfter}s`);
+            return new Response(
+                JSON.stringify({ error: 'Too many attempts', retryAfter }),
+                {
+                    status: 429,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(retryAfter),
+                        ...corsHeaders(origin, allowedOrigin),
+                    },
+                }
+            );
+        }
+    } else {
+        console.warn('→ RATE_LIMIT KV not configured — brute-force protection disabled');
+    }
+
+    // ── Parse body ──
+    let body;
+    try { body = await request.json(); }
+    catch { return corsResponse(JSON.stringify({ error: 'Invalid JSON' }), 400, origin, allowedOrigin); }
+
+    const { email, password } = body;
+    if (!email || !password) {
+        return corsResponse(JSON.stringify({ error: 'email and password required' }), 400, origin, allowedOrigin);
+    }
+
+    // ── Call Firebase Auth REST API ──
+    const authRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${env.FIREBASE_API_KEY}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, returnSecureToken: true }),
+        }
+    );
+
+    if (!authRes.ok) {
+        // ── Increment fail counter ──
+        if (env.RATE_LIMIT) {
+            const rlData = await env.RATE_LIMIT.get(rlKey, 'json') || { failCount: 0, lockedUntil: 0 };
+            const newCount = rlData.failCount + 1;
+            const backoffS = calcBackoffSeconds(newCount);
+            const lockedUntil = backoffS > 0 ? Date.now() + backoffS * 1000 : 0;
+            // Keep entry alive for at least the backoff duration (min 10 min)
+            const ttl = Math.max(backoffS + 60, 600);
+            await env.RATE_LIMIT.put(rlKey, JSON.stringify({ failCount: newCount, lockedUntil }), { expirationTtl: ttl });
+            console.log(`→ login failed: ip=${ip}, failCount=${newCount}, backoff=${backoffS}s`);
+        }
+
+        const errBody = await authRes.json().catch(() => ({}));
+        const code = errBody?.error?.message || 'INVALID_CREDENTIALS';
+        console.log(`→ firebase auth error: ${code}`);
+        // Return generic message to prevent user enumeration
+        return corsResponse(JSON.stringify({ error: 'Invalid credentials' }), 401, origin, allowedOrigin);
+    }
+
+    // ── Success — reset counter and return custom token ──
+    if (env.RATE_LIMIT) {
+        await env.RATE_LIMIT.delete(rlKey);
+    }
+
+    const authData = await authRes.json();
+    const uid = authData.localId;
+
+    let customToken;
+    try { customToken = await createCustomToken(env, uid); }
+    catch (e) {
+        console.error('Custom token error:', e.message);
+        return corsResponse(JSON.stringify({ error: 'Server error' }), 500, origin, allowedOrigin);
+    }
+
+    console.log(`→ login OK: ip=${ip}, uid=${uid}`);
+    return corsResponse(JSON.stringify({ customToken }), 200, origin, allowedOrigin);
+}
+
+// Creates a Firebase custom auth token (signed JWT) for signInWithCustomToken() on the client.
+async function createCustomToken(env, uid) {
+    const now = Math.floor(Date.now() / 1000);
+
+    const b64url = (obj) =>
+        btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+    const header  = b64url({ alg: 'RS256', typ: 'JWT' });
+    const payload = b64url({
+        iss: env.FIREBASE_SA_EMAIL,
+        sub: env.FIREBASE_SA_EMAIL,
+        aud: 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
+        uid,
+        iat: now,
+        exp: now + 3600,
+    });
+
+    const toSign = `${header}.${payload}`;
+
+    const pem = env.FIREBASE_SA_PRIVATE_KEY.replace(/\\n/g, '\n');
+    const pemContent = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+    const keyBytes = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+        'pkcs8', keyBytes.buffer,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false, ['sign']
+    );
+
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new TextEncoder().encode(toSign));
+    const encodedSig = btoa(String.fromCharCode(...new Uint8Array(sig)))
+        .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+    return `${toSign}.${encodedSig}`;
+}
+
 // ─── Password Reset Handler ───────────────────────────────────────────────────
 
 async function handleResetPassword(request, env, origin, allowedOrigin) {
@@ -316,23 +465,32 @@ async function getServiceAccountToken(env) {
     return tokenData.access_token;
 }
 
-// ─── CORS helper ──────────────────────────────────────────────────────────────
+// ─── CORS helpers ─────────────────────────────────────────────────────────────
 
-function corsResponse(body, status, origin, allowedOrigin, contentType = 'application/json') {
-    const allowed = origin === allowedOrigin
+function isAllowedOrigin(origin, allowedOrigin) {
+    return origin === allowedOrigin
         || origin === 'http://localhost'
         || origin.startsWith('http://localhost:')
         || origin.startsWith('http://127.0.0.1');
+}
 
+function corsHeaders(origin, allowedOrigin) {
+    const allowed = isAllowedOrigin(origin, allowedOrigin);
+    return {
+        'Access-Control-Allow-Origin': allowed ? origin : allowedOrigin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+}
+
+function corsResponse(body, status, origin, allowedOrigin, contentType = 'application/json') {
+    const allowed = isAllowedOrigin(origin, allowedOrigin);
     console.log(`→ CORS: origin="${origin}" allowed=${allowed}`);
-
     return new Response(body, {
         status,
         headers: {
             'Content-Type': contentType,
-            'Access-Control-Allow-Origin': allowed ? origin : allowedOrigin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            ...corsHeaders(origin, allowedOrigin),
         },
     });
 }

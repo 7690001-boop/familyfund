@@ -3,7 +3,7 @@
 // Supports email login (manager) and username login (members)
 // ============================================================
 
-import { FIREBASE_CDN } from '../config.js';
+import { FIREBASE_CDN, WORKER_LOGIN_URL } from '../config.js';
 import { getAppAuth, getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
@@ -77,11 +77,36 @@ async function loadUserProfile(firebaseUser) {
     }
 }
 
-// Manager login — with real email
+// Login — proxied through Cloudflare Worker for brute-force rate limiting.
+// Returns a Firebase custom token which is exchanged for a full session via signInWithCustomToken.
 export async function login(email, password) {
-    const { signInWithEmailAndPassword } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const res = await fetch(WORKER_LOGIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+    });
+
+    if (res.status === 429) {
+        const data = await res.json().catch(() => ({}));
+        const retryAfter = data.retryAfter ?? 60;
+        const minutes = Math.ceil(retryAfter / 60);
+        const err = new Error(`יותר מדי נסיונות התחברות. נסה שוב בעוד ${minutes} דקות.`);
+        err.code = 'auth/too-many-requests';
+        err.retryAfter = retryAfter;
+        throw err;
+    }
+
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const err = new Error(data.error || 'Invalid credentials');
+        err.code = 'auth/invalid-credential';
+        throw err;
+    }
+
+    const { customToken } = await res.json();
+    const { signInWithCustomToken } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
     const auth = getAppAuth();
-    return signInWithEmailAndPassword(auth, email, password);
+    return signInWithCustomToken(auth, customToken);
 }
 
 // Member login — with username (converted to synthetic email internally)

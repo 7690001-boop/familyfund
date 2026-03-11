@@ -45,7 +45,7 @@ service cloud.firestore {
         // Members can update their own avatar and privacy setting
         allow update: if request.auth != null && request.auth.uid == memberId
                       && isFamilyMember(familyId)
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'private', 'updated_at']);
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'jarType', 'private', 'updated_at']);
       }
 
       // Investments subcollection — only manager can write

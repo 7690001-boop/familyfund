@@ -17,6 +17,7 @@ import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
 import { exportData, importData } from '../modals/data-transfer.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
+import { renderJar, JAR_LABELS } from '../ui/jar.js';
 import { switchToMember, switchBack, isImpersonating, getParentUser } from '../../services/impersonate.js';
 
 let _container = null;
@@ -94,6 +95,7 @@ function renderShell() {
     document.title = title;
 
     const impersonating = isImpersonating();
+    const isKidMode = user.role === 'member';
 
     let visibleKids = kids;
     if (user.role === 'member') {
@@ -136,27 +138,77 @@ function renderShell() {
 
     const members = store.get('members') || [];
 
+    let headerHtml;
     let tabsHtml = '';
-    visibleKids.forEach(kid => {
-        const active = _activeTab === kid ? ' active' : '';
-        const member = members.find(m => m.name === kid);
-        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
-        const avatarSvg = renderAvatar(avatarCfg, 28);
-        tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}</button>`;
-    });
-    if (visibleKids.length > 1 || (user.role === 'member' && kids.length > 1)) {
-        const active = _activeTab === '__family__' ? ' active' : '';
-        tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">משפחה</button>`;
-    }
 
-    _container.innerHTML = `
+    if (isKidMode) {
+        // Kid mode: slim colorful header — just actions
+        headerHtml = `
+        <header class="app-header kid-mode-header">
+            <div class="header-actions">${headerActions}</div>
+        </header>`;
+
+        // Jar + Avatar centered together in the tabs-nav
+        const member = members.find(m => m.name === user.kidName);
+        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        const jarType = member?.jarType || 'glass';
+        const bigAvatar = renderAvatar(avatarCfg, 92);
+        const jarSvg = renderJar(jarType, 64);
+        const jarLabel = JAR_LABELS[jarType] || JAR_LABELS.glass;
+        const kidTabActive = (_activeTab !== '__family__') ? ' active' : '';
+
+        tabsHtml = `
+            <div class="kid-tab-area">
+                <div class="kid-identity-card${kidTabActive}" id="kid-tab-identity" data-kid="${esc(user.kidName)}">
+                    <div class="kid-id-graphics">
+                        <div class="kid-id-jar" id="kid-jar-display" title="ערוך חסכון">
+                            <div class="coin-jar-deco">
+                                ${jarSvg}
+                                <span class="drop-coin c1">🪙</span>
+                                <span class="drop-coin c2">🪙</span>
+                                <span class="drop-coin c3">🪙</span>
+                            </div>
+                            <button class="kid-id-edit-fab" id="edit-jar-btn" title="ערוך חסכון">✏️</button>
+                        </div>
+                        <div class="kid-id-avatar" id="kid-header-avatar" title="ערוך אווטאר">
+                            ${bigAvatar}
+                            <button class="kid-id-edit-fab" id="edit-avatar-fab" title="ערוך אווטאר">✏️</button>
+                        </div>
+                    </div>
+                    <div class="kid-id-name">${esc(user.kidName)}</div>
+                </div>
+            </div>`;
+
+        // Family tab on the far side — only if kid has siblings
+        if (kids.length > 1) {
+            const familyActive = _activeTab === '__family__' ? ' active' : '';
+            tabsHtml += `<button class="tab-btn tab-btn-family${familyActive}" data-kid="__family__">🏠 משפחה</button>`;
+        }
+    } else {
+        headerHtml = `
         <header class="app-header">
             <div class="header-content">
                 <h1 id="family-title">${esc(title)}</h1>
                 <div class="header-actions">${headerActions}</div>
             </div>
-        </header>
-        <nav class="tabs-nav" id="dashboard-tabs">${tabsHtml}</nav>
+        </header>`;
+
+        visibleKids.forEach(kid => {
+            const active = _activeTab === kid ? ' active' : '';
+            const member = members.find(m => m.name === kid);
+            const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+            const avatarSvg = renderAvatar(avatarCfg, 28);
+            tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}</button>`;
+        });
+        if (visibleKids.length > 1) {
+            const active = _activeTab === '__family__' ? ' active' : '';
+            tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">משפחה</button>`;
+        }
+    }
+
+    _container.innerHTML = `
+        ${headerHtml}
+        <nav class="tabs-nav${isKidMode ? ' kid-mode-tabs' : ''}" id="dashboard-tabs">${tabsHtml}</nav>
         ${visibleKids.length === 0 && user.role === 'manager' ? `
             <div class="empty-app-state">
                 <h2>ברוכים הבאים!</h2>
@@ -182,6 +234,39 @@ function renderShell() {
 function wireShellEvents() {
     const user = store.get('user');
     const effectiveUser = isImpersonating() ? getParentUser() : user;
+
+    // Kid mode: jar area click → jar modal (stop propagation so card doesn't also fire)
+    const kidJarDisplay = _container.querySelector('#kid-jar-display');
+    if (kidJarDisplay) {
+        kidJarDisplay.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const { showJarModal } = await import('../modals/jar-modal.js');
+            const members = store.get('members') || [];
+            const member = members.find(m => m.name === user.kidName);
+            showJarModal(user.kidName, member?.jarType || 'glass');
+        });
+    }
+
+    // Kid mode: avatar area click → avatar modal
+    const kidAvatarArea = _container.querySelector('#kid-header-avatar');
+    if (kidAvatarArea) {
+        kidAvatarArea.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const { showAvatarModal } = await import('../modals/avatar-modal.js');
+            const members = store.get('members') || [];
+            const member = members.find(m => m.name === user.kidName);
+            showAvatarModal(user.kidName, member?.avatar);
+        });
+    }
+
+    // Kid mode: clicking identity card (not jar/avatar) switches to kid's own view
+    const kidIdentityCard = _container.querySelector('#kid-tab-identity');
+    if (kidIdentityCard) {
+        kidIdentityCard.addEventListener('click', (e) => {
+            if (e.target.closest('#kid-jar-display') || e.target.closest('#kid-header-avatar')) return;
+            switchTab(kidIdentityCard.dataset.kid);
+        });
+    }
 
     _container.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.kid));
@@ -252,6 +337,12 @@ async function switchTab(tabId) {
         btn.classList.toggle('active', btn.dataset.kid === tabId);
     });
 
+    // Kid-identity-card is not a .tab-btn — update its active state separately
+    const kidIdentityCard = _container.querySelector('.kid-identity-card');
+    if (kidIdentityCard) {
+        kidIdentityCard.classList.toggle('active', tabId !== '__family__');
+    }
+
     const viewContainer = _container.querySelector('#view-container');
     if (!viewContainer) return;
 
@@ -297,4 +388,26 @@ function updateTabAvatars() {
         const avatarEl = btn.querySelector('.tab-avatar');
         if (avatarEl) avatarEl.innerHTML = renderAvatar(avatarCfg, 28);
     });
+    // Also update the kid-identity avatar and jar in the tabs-nav
+    const user = store.get('user');
+    const heroAvatarEl = _container.querySelector('#kid-header-avatar');
+    if (heroAvatarEl) {
+        const member = members.find(m => m.name === user?.kidName);
+        const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        heroAvatarEl.innerHTML = renderAvatar(avatarCfg, 92);
+    }
+    const jarDisplay = _container.querySelector('#kid-jar-display');
+    if (jarDisplay) {
+        const member = members.find(m => m.name === user?.kidName);
+        const jarType = member?.jarType || 'glass';
+        const jarDeco = jarDisplay.querySelector('.coin-jar-deco');
+        if (jarDeco) {
+            jarDeco.innerHTML = renderJar(jarType, 64) +
+                '<span class="drop-coin c1">🪙</span>' +
+                '<span class="drop-coin c2">🪙</span>' +
+                '<span class="drop-coin c3">🪙</span>';
+        }
+        const jarNameEl = jarDisplay.querySelector('.kid-jar-name');
+        if (jarNameEl) jarNameEl.textContent = JAR_LABELS[jarType] || JAR_LABELS.glass;
+    }
 }

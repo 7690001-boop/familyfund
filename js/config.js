@@ -17,7 +17,8 @@ export const FIREBASE_CDN = 'https://www.gstatic.com/firebasejs/10.14.1';
 // Yahoo Finance — routed through Cloudflare Worker proxy to avoid CORS
 // After deploying cloudflare-worker/worker.js, replace the URL below with your worker URL
 // e.g. https://yahoo-proxy.YOUR-NAME.workers.dev
-export const YAHOO_PROXY = 'https://yahoo-proxy.7690001.workers.dev';
+export const YAHOO_PROXY      = 'https://yahoo-proxy.7690001.workers.dev';
+export const WORKER_LOGIN_URL = YAHOO_PROXY + '/login';
 export const YAHOO_CHART_URL  = YAHOO_PROXY + '/chart';
 export const YAHOO_SEARCH_URL = YAHOO_PROXY + '/search';
 

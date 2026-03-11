@@ -295,18 +295,27 @@ function hairBehind(type, color) {
             `;
         case 'ponytail':
             return `
-                <path d="M26 36 Q16 34 14 48 Q12 62 16 78 Q18 86 24 82 Q20 66 22 50 Q23 40 26 36Z" fill="${color}" opacity="0.8"/>
-                <circle cx="18" cy="84" r="9" fill="${color}" opacity="0.85"/>
-                <circle cx="16" cy="76" r="6" fill="${color}" opacity="0.8"/>
+                <path d="M94 40 Q106 46 108 62 Q110 76 106 88" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+                <circle cx="106" cy="90" r="10" fill="${color}" opacity="0.85"/>
+                <ellipse cx="104" cy="82" rx="6" ry="5" fill="${color}" opacity="0.75"/>
+            `;
+        case 'lob':
+            return `
+                <path d="M20 46 Q15 62 17 80 Q18 88 24 84 L26 52Z" fill="${color}" opacity="0.9"/>
+                <path d="M100 46 Q105 62 103 80 Q102 88 96 84 L94 52Z" fill="${color}" opacity="0.9"/>
+            `;
+        case 'side-braid':
+            return `
+                <path d="M94 44 Q106 52 108 68 Q110 80 106 92" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+                <path d="M98 54 L106 58 M100 64 L108 68 M102 74 L108 78 M104 84 L108 88" fill="none" stroke="${color}" stroke-width="1.8" opacity="0.45"/>
+                <circle cx="106" cy="94" r="6" fill="${color}" opacity="0.85"/>
             `;
         case 'pigtails':
             return `
-                <path d="M24 38 Q14 42 10 56 Q8 70 14 82" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
-                <circle cx="14" cy="84" r="9" fill="${color}" opacity="0.85"/>
-                <circle cx="12" cy="76" r="6" fill="${color}" opacity="0.8"/>
-                <path d="M96 38 Q106 42 110 56 Q112 70 106 82" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
-                <circle cx="106" cy="84" r="9" fill="${color}" opacity="0.85"/>
-                <circle cx="108" cy="76" r="6" fill="${color}" opacity="0.8"/>
+                <path d="M24 40 Q12 48 10 64 Q8 76 14 88" fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round" opacity="0.85"/>
+                <circle cx="14" cy="90" r="8" fill="${color}" opacity="0.85"/>
+                <path d="M96 40 Q108 48 110 64 Q112 76 106 88" fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round" opacity="0.85"/>
+                <circle cx="106" cy="90" r="8" fill="${color}" opacity="0.85"/>
             `;
         case 'wavy':
             return `
@@ -367,12 +376,14 @@ function hairPart(type, color) {
         case 'pigtails':
             return `
                 <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
-                <path d="M24 42 Q22 48 22 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
-                <path d="M96 42 Q98 48 98 54" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+                <path d="M26 38 Q24 32 22 38" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+                <path d="M94 38 Q96 32 98 38" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
             `;
         case 'buzz':
             return `
-                <path d="M28 50 Q30 22 60 18 Q90 22 92 50 Q88 34 75 26 Q60 22 45 26 Q32 34 28 50Z" fill="${color}" opacity="0.6"/>
+                <path d="M27 50 Q29 24 60 18 Q91 24 93 50 Q89 34 76 26 Q60 22 44 26 Q31 34 27 50Z" fill="${color}" opacity="0.88"/>
+                <path d="M24 52 Q22 58 22 64" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                <path d="M96 52 Q98 58 98 64" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
             `;
         case 'mohawk':
             return `
@@ -422,6 +433,35 @@ function hairPart(type, color) {
                 <path d="M78 14 Q84 24 92 44 Q94 48 96 54" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
                 <path d="M60 10 Q56 14 50 22" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
                 <path d="M60 10 Q64 14 70 22" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+            `;
+        case 'lob':
+            return `
+                <path d="M22 46 Q18 26 34 16 Q48 8 60 8 Q72 8 86 16 Q102 26 98 46" fill="${color}"/>
+                <path d="M22 46 Q20 60 20 78 Q21 86 26 82 Q24 68 24 50Z" fill="${color}" opacity="0.9"/>
+                <path d="M98 46 Q100 60 100 78 Q99 86 94 82 Q96 68 96 50Z" fill="${color}" opacity="0.9"/>
+            `;
+        case 'twin-buns':
+            return `
+                <path d="M26 46 Q30 20 60 14 Q90 20 94 46 Q88 32 74 24 Q60 20 46 24 Q32 32 26 46Z" fill="${color}"/>
+                <circle cx="40" cy="11" r="13" fill="${color}"/>
+                <ellipse cx="40" cy="11" rx="7" ry="7" fill="${color}" opacity="0.5"/>
+                <circle cx="80" cy="11" r="13" fill="${color}"/>
+                <ellipse cx="80" cy="11" rx="7" ry="7" fill="${color}" opacity="0.5"/>
+            `;
+        case 'pixie':
+            return `
+                <path d="M27 50 Q29 26 44 17 Q56 10 60 10 Q64 10 76 17 Q91 26 93 50 Q89 34 76 24 Q60 18 44 24 Q31 34 27 50Z" fill="${color}" opacity="0.9"/>
+                <path d="M46 13 Q53 6 62 8 Q55 8 49 15Z" fill="${color}"/>
+                <path d="M74 13 Q67 6 58 8 Q65 8 71 15Z" fill="${color}"/>
+                <path d="M38 22 Q33 15 36 24Z" fill="${color}" opacity="0.7"/>
+                <path d="M82 22 Q87 15 84 24Z" fill="${color}" opacity="0.7"/>
+                <path d="M24 50 Q22 56 22 63" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+                <path d="M96 50 Q98 56 98 63" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+            `;
+        case 'side-braid':
+            return `
+                <path d="M25 45 Q30 18 60 14 Q90 18 95 45 Q90 30 75 24 Q60 20 45 24 Q30 30 25 45Z" fill="${color}"/>
+                <path d="M92 38 Q96 32 98 42" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
             `;
         case 'none':
             return '';
@@ -625,7 +665,7 @@ export const FACE_SHAPE_OPTIONS = ['round', 'oval', 'square', 'heart'];
 export const EYES_OPTIONS = ['happy', 'round', 'wink', 'cool', 'big', 'sleepy', 'heart', 'stars', 'lashes', 'dizzy'];
 export const EYEBROW_OPTIONS = ['normal', 'raised', 'angry', 'thick', 'worried', 'none'];
 export const MOUTH_OPTIONS = ['smile', 'grin', 'tongue', 'neutral', 'surprised', 'cat', 'kiss', 'teeth', 'smirk', 'fangs'];
-export const HAIR_OPTIONS = ['short', 'spiky', 'curly', 'long', 'ponytail', 'pigtails', 'buzz', 'mohawk', 'bun', 'afro', 'sidepart', 'wavy', 'braids', 'curtain', 'none'];
+export const HAIR_OPTIONS = ['short', 'pixie', 'buzz', 'spiky', 'mohawk', 'curly', 'wavy', 'lob', 'long', 'sidepart', 'curtain', 'bun', 'twin-buns', 'ponytail', 'pigtails', 'side-braid', 'braids', 'afro', 'none'];
 export const ACCESSORY_OPTIONS = ['hat', 'crown', 'bow', 'headband', 'flower', 'star', 'cap', 'beanie', 'earrings', 'bandana', 'tiara', 'butterfly', 'hearts'];
 export const GLASSES_OPTIONS = ['none', 'round', 'square', 'cat-eye'];
 
@@ -660,10 +700,11 @@ export const MOUTH_LABELS = {
     kiss: 'נשיקה', teeth: 'שיניים', smirk: 'חצי חיוך', fangs: 'ניבים',
 };
 export const HAIR_LABELS = {
-    short: 'קצר', spiky: 'סוער', curly: 'מתולתל', long: 'ארוך',
-    ponytail: 'קוקו', pigtails: 'צמות', buzz: 'מגולח', mohawk: 'מוהיקן',
-    bun: 'גולגול', afro: 'אפרו', sidepart: 'פחדן', wavy: 'גלי',
-    braids: 'צמות קלוע', curtain: 'פוני', none: 'ללא',
+    short: 'קצר', pixie: 'פיקסי', buzz: 'מגולח', spiky: 'סוער', mohawk: 'מוהיקן',
+    curly: 'מתולתל', wavy: 'גלי', lob: 'בוב', long: 'ארוך',
+    sidepart: 'חלוקה', curtain: 'פוני', bun: 'גולגול', 'twin-buns': 'שתי קוקויות',
+    ponytail: 'קוקו', pigtails: 'שתי צמות', 'side-braid': 'צמה צדדית',
+    braids: 'צמות קלועות', afro: 'אפרו', none: 'ללא',
 };
 export const ACCESSORY_LABELS = {
     hat: 'כובע', crown: 'כתר', bow: 'פפיון', headband: 'סרט', flower: 'פרח', star: 'כוכב',

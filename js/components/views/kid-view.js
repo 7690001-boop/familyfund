@@ -75,8 +75,9 @@ function renderView() {
     const isPrivate = member?.private === true;
     const canTogglePrivacy = user.kidName === _kidName || user.role === 'manager';
 
+    const isMemberView = user.role === 'member';
     _container.innerHTML = `
-        <section class="kid-header">
+        <section class="kid-header${isMemberView ? ' member-mode' : ''}">
             <div class="kid-avatar-display" id="kid-avatar">
                 ${renderAvatar(avatarCfg, 72)}
                 ${canEditAvatar ? '<button class="avatar-edit-btn" id="edit-avatar-btn" title="ערוך אווטאר">✏️</button>' : ''}

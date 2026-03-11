@@ -7,7 +7,7 @@ import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
 
-const PRICE_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+const PRICE_REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 let priceTimer = null;
 let _waitForInvestmentsUnsub = null;
 let _fetchInProgress = false;
@@ -239,7 +239,10 @@ export async function loadPriceCache(familyId) {
 
 function _startTimer() {
     if (priceTimer) return; // Already running
-    fetchPrices(true);
+    // Only fetch immediately if cached prices are stale (older than the refresh interval)
+    const lastUpdate = store.get('priceLastUpdate');
+    const isStale = !lastUpdate || (Date.now() - new Date(lastUpdate).getTime()) > PRICE_REFRESH_MS;
+    if (isStale) fetchPrices(true);
     priceTimer = setInterval(() => fetchPrices(true), PRICE_REFRESH_MS);
 }
 

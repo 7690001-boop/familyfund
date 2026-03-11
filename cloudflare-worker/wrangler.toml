@@ -9,5 +9,12 @@ compatibility_date = "2025-01-01"
 #   FIREBASE_SA_EMAIL
 #   FIREBASE_SA_PRIVATE_KEY
 
+# KV namespace for brute-force rate limiting on /login
+# Setup: wrangler kv namespace create "RATE_LIMIT"
+# Then replace the id below with the returned namespace ID.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "e2f53eaaa07e4db5812a98d56ecbe52d"
+
 [observability]
 enabled = true

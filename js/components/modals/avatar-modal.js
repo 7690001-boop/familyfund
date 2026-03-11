@@ -23,7 +23,44 @@ export function showAvatarModal(kidName, currentAvatar) {
         cfg.accessories = [cfg.accessory];
     }
     if (!Array.isArray(cfg.accessories)) cfg.accessories = [];
+    const originalCfg = { ...cfg, accessories: [...cfg.accessories] };
     let draft = { ...cfg, accessories: [...cfg.accessories] };
+
+    let saveTimer = null;
+    let saveGeneration = 0;
+
+    function updateStatus(status) {
+        const el = document.getElementById('avatar-save-status');
+        if (!el) return;
+        if (status === 'saving') { el.textContent = 'שומר...'; el.className = 'avatar-save-status saving'; }
+        else if (status === 'saved') { el.textContent = '✓ נשמר'; el.className = 'avatar-save-status saved'; }
+        else if (status === 'error') { el.textContent = '⚠ שגיאה'; el.className = 'avatar-save-status error'; }
+        else { el.textContent = ''; el.className = 'avatar-save-status'; }
+    }
+
+    async function autoSave() {
+        clearTimeout(saveTimer);
+        const gen = ++saveGeneration;
+        updateStatus('saving');
+        saveTimer = setTimeout(async () => {
+            if (gen !== saveGeneration) return;
+            try {
+                const user = store.get('user');
+                const members = store.get('members') || [];
+                const member = members.find(m => m.name === kidName);
+                if (member) {
+                    await familyService.updateMember(user.familyId, member.uid || member.id, { avatar: draft });
+                }
+                if (gen === saveGeneration) updateStatus('saved');
+            } catch (e) {
+                console.error('Failed to save avatar:', e);
+                if (gen === saveGeneration) {
+                    updateStatus('error');
+                    emit('toast', { message: 'שגיאה בשמירת האווטאר', type: 'error' });
+                }
+            }
+        }, 400);
+    }
 
     function preview() {
         const el = document.getElementById('avatar-preview');
@@ -121,8 +158,8 @@ export function showAvatarModal(kidName, currentAvatar) {
             </div>
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-primary" id="modal-save">שמור</button>
+            <span class="avatar-save-status" id="avatar-save-status"></span>
+            <button class="btn btn-secondary" id="modal-cancel">בטל שינויים</button>
         </div>
     `;
 
@@ -138,6 +175,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             modal.querySelectorAll('#' + containerId + ' .avatar-color-swatch').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             preview();
+            autoSave();
         });
     }
     wireColors('pick-bg', 'bgColor');
@@ -154,6 +192,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             modal.querySelectorAll('#' + containerId + ' .avatar-option-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             preview();
+            autoSave();
         });
     }
     wireOptions('pick-face', 'faceShape');
@@ -177,6 +216,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             btn.classList.add('active');
         }
         preview();
+        autoSave();
     });
 
     // Wire freckles toggle
@@ -187,6 +227,7 @@ export function showAvatarModal(kidName, currentAvatar) {
         modal.querySelectorAll('#pick-freckles .avatar-option-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         preview();
+        autoSave();
     });
 
     // Randomize
@@ -213,6 +254,7 @@ export function showAvatarModal(kidName, currentAvatar) {
         };
         rebuildControls();
         preview();
+        autoSave();
     });
 
     function rebuildControls() {
@@ -246,27 +288,20 @@ export function showAvatarModal(kidName, currentAvatar) {
         });
     }
 
-    // Cancel / Save
-    modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
-    modal.querySelector('#modal-save').addEventListener('click', async () => {
-        const btn = modal.querySelector('#modal-save');
-        btn.disabled = true;
-        btn.textContent = 'שומר...';
-
+    // Cancel — revert to original avatar
+    modal.querySelector('#modal-cancel').addEventListener('click', async () => {
+        clearTimeout(saveTimer);
+        saveGeneration++; // invalidate any pending auto-save
         try {
             const user = store.get('user');
             const members = store.get('members') || [];
             const member = members.find(m => m.name === kidName);
             if (member) {
-                await familyService.updateMember(user.familyId, member.uid || member.id, { avatar: draft });
+                await familyService.updateMember(user.familyId, member.uid || member.id, { avatar: originalCfg });
             }
-            closeModal();
-            emit('toast', { message: 'האווטאר עודכן!', type: 'success' });
         } catch (e) {
-            console.error('Failed to save avatar:', e);
-            emit('toast', { message: 'שגיאה בשמירת האווטאר', type: 'error' });
-            btn.disabled = false;
-            btn.textContent = 'שמור';
+            console.error('Failed to revert avatar:', e);
         }
+        closeModal();
     });
 }
