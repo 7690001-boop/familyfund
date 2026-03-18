@@ -14,7 +14,7 @@ A Hebrew RTL family finance app for parents and kids to manage shared investment
 - Manager (parent) and member (kid) roles with family-scoped permissions
 - Investment portfolio tracking with real-time prices (stocks, ETFs, Israeli mutual funds)
 - Personal savings goals and investment simulations per member
-- Kid login via username + family code (synthetic email: `member.saveing.local`)
+- Kid login via username + password (synthetic email: `member.saveing.local`)
 - Avatar customization, member impersonation for testing
 
 ## Project Structure

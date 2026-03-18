@@ -171,6 +171,79 @@ export async function createMemberAccount(username, password, familyId, displayN
     }
 }
 
+// Rename a member — calls the Cloudflare Worker to update name across all documents.
+// Works for both self-rename (member) and manager-initiated rename.
+export async function renameMember(memberUid, newName) {
+    const { getAppAuth } = await import('../firebase-init.js');
+    const idToken = await getAppAuth().currentUser.getIdToken();
+
+    const res = await fetch(`${YAHOO_PROXY}/rename-member`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ memberUid, newName }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to rename');
+    }
+
+    // Update local store if renaming the current user
+    const user = store.get('user');
+    if (user && user.uid === memberUid) {
+        store.set('user', { ...user, kidName: newName, displayName: newName });
+    }
+
+    return res.json();
+}
+
+// Create a co-manager (additional parent) account using a secondary Firebase app.
+export async function createCoManagerAccount(email, password, familyId, displayName) {
+    const { initializeApp, deleteApp } = await import(`${FIREBASE_CDN}/firebase-app.js`);
+    const { getAuth, createUserWithEmailAndPassword, signOut } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const { doc, setDoc } = await fs();
+    const db = getAppDb();
+
+    const secondaryApp = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        const newUid = cred.user.uid;
+
+        // Write user profile
+        await setDoc(doc(db, 'users', newUid), {
+            email,
+            displayName,
+            role: 'manager',
+            familyId,
+            kidName: null,
+            created_at: new Date().toISOString(),
+        });
+
+        // Write member doc under family
+        await setDoc(doc(db, 'families', familyId, 'members', newUid), {
+            name: displayName,
+            email,
+            role: 'manager',
+            uid: newUid,
+            created_at: new Date().toISOString(),
+        });
+
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+
+        return newUid;
+    } catch (e) {
+        try { await signOut(secondaryAuth); } catch (_) {}
+        try { await deleteApp(secondaryApp); } catch (_) {}
+        throw e;
+    }
+}
+
 // Reset a member's password — calls the Cloudflare Worker with the manager's ID token.
 export async function resetMemberPassword(memberUid, newPassword) {
     const { getAppAuth } = await import('../firebase-init.js');

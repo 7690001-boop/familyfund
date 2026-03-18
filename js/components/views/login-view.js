@@ -1,17 +1,16 @@
 // ============================================================
-// Login View — dual login: manager (email) and kid (username)
+// Login View — unified login for all users (manager & member)
+// Auto-detects role by input: email → manager, username → member
 // ============================================================
 
-import { esc } from '../../utils/dom-helpers.js';
-import { emit } from '../../event-bus.js';
 import * as authService from '../../services/auth-service.js';
 
 let container = null;
-let activeMode = 'kid'; // 'kid' or 'manager'
+let showSignup = false;
 
 export function mount(el) {
     container = el;
-    activeMode = 'kid';
+    showSignup = false;
     render();
 }
 
@@ -22,78 +21,12 @@ export function unmount() {
 function render() {
     if (!container) return;
 
-    const kidActive = activeMode === 'kid' ? ' active' : '';
-    const managerActive = activeMode === 'manager' ? ' active' : '';
-
     container.innerHTML = `
         <div class="auth-gate" style="display:flex">
             <div class="auth-box" style="max-width:400px">
                 <h2>Family Money</h2>
 
-                <!-- Login mode tabs -->
-                <div class="login-tabs">
-                    <button class="login-tab${kidActive}" id="tab-kid">ילד/ה</button>
-                    <button class="login-tab${managerActive}" id="tab-manager">מנהל/ת</button>
-                </div>
-
-                <!-- Kid login (username-based) -->
-                <div id="kid-login-form"${activeMode !== 'kid' ? ' hidden' : ''}>
-                    <p style="color:var(--color-text-muted);font-size:0.88rem;margin-bottom:1rem">
-                        הכנס עם שם המשתמש שקיבלת מההורים
-                    </p>
-                    <div class="form-group">
-                        <label for="kid-username">שם משתמש</label>
-                        <input type="text" id="kid-username" placeholder="למשל: דניאל" autocomplete="username">
-                    </div>
-                    <div class="form-group">
-                        <label for="kid-password">סיסמה</label>
-                        <input type="password" id="kid-password" placeholder="סיסמה" autocomplete="current-password">
-                    </div>
-                    <div id="kid-login-error" class="auth-error" hidden></div>
-                    <button id="kid-login-btn" class="btn btn-primary btn-large" style="width:100%">כניסה</button>
-                </div>
-
-                <!-- Manager login (email-based) -->
-                <div id="manager-login-form"${activeMode !== 'manager' ? ' hidden' : ''}>
-                    <div id="manager-signin"${activeMode === 'manager' ? '' : ' hidden'}>
-                        <div class="form-group">
-                            <label for="login-email">אימייל</label>
-                            <input type="email" id="login-email" placeholder="email@example.com" dir="ltr" autocomplete="email">
-                        </div>
-                        <div class="form-group">
-                            <label for="login-password">סיסמה</label>
-                            <input type="password" id="login-password" placeholder="סיסמה" autocomplete="current-password">
-                        </div>
-                        <div id="login-error" class="auth-error" hidden></div>
-                        <button id="login-btn" class="btn btn-primary btn-large" style="width:100%">כניסה</button>
-                        <div style="margin-top:1rem;text-align:center">
-                            <button id="switch-to-signup" class="btn btn-ghost" style="font-size:0.88rem">
-                                אין לך חשבון? הרשם כמנהל משפחה
-                            </button>
-                        </div>
-                    </div>
-                    <div id="manager-signup" hidden>
-                        <div class="form-group">
-                            <label for="signup-email">אימייל</label>
-                            <input type="email" id="signup-email" placeholder="email@example.com" dir="ltr" autocomplete="email">
-                        </div>
-                        <div class="form-group">
-                            <label for="signup-password">סיסמה</label>
-                            <input type="password" id="signup-password" placeholder="לפחות 6 תווים" autocomplete="new-password">
-                        </div>
-                        <div class="form-group">
-                            <label for="signup-password-confirm">אימות סיסמה</label>
-                            <input type="password" id="signup-password-confirm" placeholder="הזן סיסמה שוב" autocomplete="new-password">
-                        </div>
-                        <div id="signup-error" class="auth-error" hidden></div>
-                        <button id="signup-btn" class="btn btn-primary btn-large" style="width:100%">הרשמה</button>
-                        <div style="margin-top:1rem;text-align:center">
-                            <button id="switch-to-login" class="btn btn-ghost" style="font-size:0.88rem">
-                                יש לך חשבון? התחבר
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                ${showSignup ? renderSignup() : renderLogin()}
             </div>
         </div>
     `;
@@ -101,118 +34,110 @@ function render() {
     setupEvents();
 }
 
+function renderLogin() {
+    return `
+        <div id="login-form">
+            <p style="color:var(--color-text-muted);font-size:0.88rem;margin-bottom:1rem">
+                הכנס עם שם משתמש או אימייל
+            </p>
+            <div class="form-group">
+                <label for="login-identifier">שם משתמש או אימייל</label>
+                <input type="text" id="login-identifier" placeholder="למשל: דניאל או email@example.com" autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="login-password">סיסמה</label>
+                <input type="password" id="login-password" placeholder="סיסמה" autocomplete="current-password">
+            </div>
+            <div id="login-error" class="auth-error" hidden></div>
+            <button id="login-btn" class="btn btn-primary btn-large" style="width:100%">כניסה</button>
+            <div style="margin-top:1rem;text-align:center">
+                <button id="switch-to-signup" class="btn btn-ghost" style="font-size:0.88rem">
+                    אין לך חשבון? הרשם כמנהל משפחה
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function renderSignup() {
+    return `
+        <div id="signup-form">
+            <div class="form-group">
+                <label for="signup-email">אימייל</label>
+                <input type="email" id="signup-email" placeholder="email@example.com" dir="ltr" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label for="signup-password">סיסמה</label>
+                <input type="password" id="signup-password" placeholder="לפחות 6 תווים" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="signup-password-confirm">אימות סיסמה</label>
+                <input type="password" id="signup-password-confirm" placeholder="הזן סיסמה שוב" autocomplete="new-password">
+            </div>
+            <div id="signup-error" class="auth-error" hidden></div>
+            <button id="signup-btn" class="btn btn-primary btn-large" style="width:100%">הרשמה</button>
+            <div style="margin-top:1rem;text-align:center">
+                <button id="switch-to-login" class="btn btn-ghost" style="font-size:0.88rem">
+                    יש לך חשבון? התחבר
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function isEmail(value) {
+    return value.includes('@');
+}
+
 function setupEvents() {
-    // Tab switching
-    container.querySelector('#tab-kid').addEventListener('click', () => {
-        activeMode = 'kid';
-        render();
-    });
-    container.querySelector('#tab-manager').addEventListener('click', () => {
-        activeMode = 'manager';
-        render();
-    });
-
-    // Kid login
-    const kidLoginBtn = container.querySelector('#kid-login-btn');
-    if (kidLoginBtn) {
-        kidLoginBtn.addEventListener('click', handleKidLogin);
-        container.querySelector('#kid-username').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') container.querySelector('#kid-password')?.focus();
-        });
-        container.querySelector('#kid-password').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleKidLogin();
-        });
-    }
-
-    // Manager login
+    // Login form
     const loginBtn = container.querySelector('#login-btn');
     if (loginBtn) {
-        loginBtn.addEventListener('click', handleManagerLogin);
-        container.querySelector('#login-password')?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleManagerLogin();
+        loginBtn.addEventListener('click', handleLogin);
+        container.querySelector('#login-identifier')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') container.querySelector('#login-password')?.focus();
         });
+        container.querySelector('#login-password')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleLogin();
+        });
+        container.querySelector('#login-identifier')?.focus();
     }
 
-    // Manager signup toggle
+    // Signup toggle
     const switchToSignup = container.querySelector('#switch-to-signup');
-    const switchToLogin = container.querySelector('#switch-to-login');
     if (switchToSignup) {
         switchToSignup.addEventListener('click', () => {
-            container.querySelector('#manager-signin').hidden = true;
-            container.querySelector('#manager-signup').hidden = false;
-            container.querySelector('#signup-email')?.focus();
+            showSignup = true;
+            render();
         });
     }
+    const switchToLogin = container.querySelector('#switch-to-login');
     if (switchToLogin) {
         switchToLogin.addEventListener('click', () => {
-            container.querySelector('#manager-signup').hidden = true;
-            container.querySelector('#manager-signin').hidden = false;
-            container.querySelector('#login-email')?.focus();
+            showSignup = false;
+            render();
         });
     }
 
-    // Manager signup
+    // Signup form
     const signupBtn = container.querySelector('#signup-btn');
     if (signupBtn) {
         signupBtn.addEventListener('click', handleSignup);
         container.querySelector('#signup-password-confirm')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') handleSignup();
         });
-    }
-
-    // Auto-focus
-    if (activeMode === 'kid') {
-        container.querySelector('#kid-username')?.focus();
-    } else {
-        container.querySelector('#login-email')?.focus();
+        container.querySelector('#signup-email')?.focus();
     }
 }
 
-async function handleKidLogin() {
-    const username = container.querySelector('#kid-username').value.trim();
-    const password = container.querySelector('#kid-password').value;
-    const errorEl = container.querySelector('#kid-login-error');
-    const btn = container.querySelector('#kid-login-btn');
-
-    if (!username || !password) {
-        showError(errorEl, 'נא למלא שם משתמש וסיסמה');
-        return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'מתחבר...';
-    errorEl.hidden = true;
-
-    try {
-        // Look up familyId from username before authenticating
-        const familyId = await authService.lookupFamilyIdByUsername(username);
-        if (!familyId) {
-            showError(errorEl, 'שם משתמש לא נמצא');
-            btn.disabled = false;
-            btn.textContent = 'כניסה';
-            return;
-        }
-        await authService.loginWithUsername(username, password, familyId);
-        // onAuthStateChanged will handle the rest
-    } catch (e) {
-        const msg = e.code === 'auth/invalid-credential' ? 'שם משתמש או סיסמה שגויים'
-            : e.code === 'auth/user-not-found' ? 'משתמש לא נמצא'
-            : e.code === 'auth/too-many-requests' ? 'יותר מדי ניסיונות, נסה מאוחר יותר'
-            : 'שגיאה בהתחברות: ' + e.message;
-        showError(errorEl, msg);
-        btn.disabled = false;
-        btn.textContent = 'כניסה';
-    }
-}
-
-async function handleManagerLogin() {
-    const email = container.querySelector('#login-email').value.trim();
+async function handleLogin() {
+    const identifier = container.querySelector('#login-identifier').value.trim();
     const password = container.querySelector('#login-password').value;
     const errorEl = container.querySelector('#login-error');
     const btn = container.querySelector('#login-btn');
 
-    if (!email || !password) {
-        showError(errorEl, 'נא למלא אימייל וסיסמה');
+    if (!identifier || !password) {
+        showError(errorEl, 'נא למלא שם משתמש/אימייל וסיסמה');
         return;
     }
 
@@ -221,9 +146,23 @@ async function handleManagerLogin() {
     errorEl.hidden = true;
 
     try {
-        await authService.login(email, password);
+        if (isEmail(identifier)) {
+            // Email login (manager / system)
+            await authService.login(identifier, password);
+        } else {
+            // Username login (member) — look up familyId first
+            const familyId = await authService.lookupFamilyIdByUsername(identifier);
+            if (!familyId) {
+                showError(errorEl, 'שם משתמש לא נמצא');
+                btn.disabled = false;
+                btn.textContent = 'כניסה';
+                return;
+            }
+            await authService.loginWithUsername(identifier, password, familyId);
+        }
+        // onAuthStateChanged will handle routing
     } catch (e) {
-        const msg = e.code === 'auth/invalid-credential' ? 'אימייל או סיסמה שגויים'
+        const msg = e.code === 'auth/invalid-credential' ? 'שם משתמש/אימייל או סיסמה שגויים'
             : e.code === 'auth/user-not-found' ? 'משתמש לא נמצא'
             : e.code === 'auth/too-many-requests' ? 'יותר מדי ניסיונות, נסה מאוחר יותר'
             : 'שגיאה בהתחברות: ' + e.message;

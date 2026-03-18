@@ -606,7 +606,12 @@ function updatePurchasePriceDisplay(modal, price, type) {
             if (ilsAmount > 0) { amountInput.value = +ilsAmount.toFixed(2); updateFxEquiv(modal); }
         });
     } else {
-        display.innerHTML = '<span class="price-error">אין נתון ל' + (labels[type] || type) + '</span>';
+        const label = labels[type] || type;
+        const span = document.createElement('span');
+        span.className = 'price-error';
+        span.textContent = 'אין נתון ל' + label;
+        display.innerHTML = '';
+        display.appendChild(span);
     }
 }
 

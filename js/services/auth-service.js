@@ -7,6 +7,7 @@ import { FIREBASE_CDN, WORKER_LOGIN_URL } from '../config.js';
 import { getAppAuth, getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
+import { clearImpersonation } from './impersonate.js';
 
 let unsubAuth = null;
 
@@ -142,6 +143,7 @@ export async function signup(email, password) {
 export async function logout() {
     const { signOut } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
     const auth = getAppAuth();
+    clearImpersonation();
     await signOut(auth);
     store.set('user', null);
     store.set('family', null);

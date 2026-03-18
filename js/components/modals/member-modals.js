@@ -1,5 +1,5 @@
 // ============================================================
-// Member Modals — add/manage/remove family members
+// Member Modals — add/manage/remove/rename family members
 // ============================================================
 
 import * as store from '../../store.js';
@@ -78,6 +78,111 @@ export function showAddMemberModal() {
     modal.querySelector('#member-name').focus();
 }
 
+export function showAddCoManagerModal() {
+    const user = store.get('user');
+
+    const html = `
+        <h2>הוספת הורה נוסף</h2>
+        <div class="form-group">
+            <label for="comanager-name">שם תצוגה</label>
+            <input type="text" id="comanager-name" placeholder="למשל: אמא">
+        </div>
+        <div class="form-group">
+            <label for="comanager-email">אימייל (לכניסה)</label>
+            <input type="email" id="comanager-email" dir="ltr" placeholder="parent@example.com">
+        </div>
+        <div class="form-group">
+            <label for="comanager-password">סיסמה</label>
+            <input type="text" id="comanager-password" placeholder="לפחות 6 תווים">
+        </div>
+        <div id="comanager-error" class="auth-error" hidden></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
+            <button class="btn btn-primary" id="modal-save">הוסף הורה</button>
+        </div>
+    `;
+
+    openModal(html);
+    const modal = document.getElementById('modal-content');
+    modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
+    modal.querySelector('#modal-save').addEventListener('click', async () => {
+        const name = modal.querySelector('#comanager-name').value.trim();
+        const email = modal.querySelector('#comanager-email').value.trim();
+        const password = modal.querySelector('#comanager-password').value;
+        const errorEl = modal.querySelector('#comanager-error');
+
+        if (!name) { modal.querySelector('#comanager-name').focus(); return; }
+        if (!email) { modal.querySelector('#comanager-email').focus(); return; }
+        if (!password || password.length < 6) {
+            errorEl.textContent = 'סיסמה חייבת להכיל לפחות 6 תווים';
+            errorEl.hidden = false;
+            return;
+        }
+
+        const btn = modal.querySelector('#modal-save');
+        btn.disabled = true;
+        btn.textContent = 'יוצר חשבון...';
+        errorEl.hidden = true;
+
+        try {
+            await familyService.createCoManagerAccount(email, password, user.familyId, name);
+            closeModal();
+            emit('toast', { message: name + ' נוסף/ה כהורה', type: 'success' });
+        } catch (e) {
+            const msg = e.code === 'auth/email-already-in-use' ? 'אימייל כבר רשום במערכת'
+                : 'שגיאה ביצירת חשבון: ' + e.message;
+            errorEl.textContent = msg;
+            errorEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = 'הוסף הורה';
+        }
+    });
+    modal.querySelector('#comanager-name').focus();
+}
+
+export function showRenameMemberModal(memberUid, currentName) {
+    const html = `
+        <h2>שינוי שם תצוגה</h2>
+        <div class="form-group">
+            <label for="rename-input">שם חדש</label>
+            <input type="text" id="rename-input" value="${esc(currentName)}">
+        </div>
+        <div id="rename-error" class="auth-error" hidden></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
+            <button class="btn btn-primary" id="modal-save">שמור</button>
+        </div>
+    `;
+
+    openModal(html);
+    const modal = document.getElementById('modal-content');
+    modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
+    modal.querySelector('#rename-input').focus();
+    modal.querySelector('#rename-input').select();
+    modal.querySelector('#modal-save').addEventListener('click', async () => {
+        const newName = modal.querySelector('#rename-input').value.trim();
+        const errorEl = modal.querySelector('#rename-error');
+        if (!newName) { modal.querySelector('#rename-input').focus(); return; }
+        if (newName === currentName) { closeModal(); return; }
+
+        const btn = modal.querySelector('#modal-save');
+        btn.disabled = true;
+        btn.textContent = 'שומר...';
+        errorEl.hidden = true;
+
+        try {
+            await familyService.renameMember(memberUid, newName);
+            closeModal();
+            emit('toast', { message: 'השם עודכן', type: 'success' });
+        } catch (e) {
+            errorEl.textContent = 'שגיאה בעדכון שם: ' + (e.message || e);
+            errorEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = 'שמור';
+        }
+    });
+}
+
 export function showManageMembersModal() {
     const members = store.get('members') || [];
     const user = store.get('user');
@@ -86,26 +191,37 @@ export function showManageMembersModal() {
     let memberRows = '';
     members.forEach(m => {
         const isMe = m.uid === user.uid;
-        const roleLabel = m.role === 'manager' ? 'מנהל' : 'ילד/ה';
+        const roleLabel = m.role === 'manager' ? 'הורה' : 'ילד/ה';
         const identifier = m.username ? 'משתמש: ' + m.username : m.email || '';
         const avatarSvg = renderAvatar(m.avatar || DEFAULT_AVATAR, 36);
+
+        let actionBtns = '';
+        // Rename — everyone (including self)
+        actionBtns += `<button class="btn btn-ghost rename-member-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="שנה שם">✏️</button>`;
+        // Avatar — everyone
+        actionBtns += `<button class="btn btn-ghost edit-avatar-member-btn" data-name="${esc(m.name)}" title="ערוך אווטאר">🎨</button>`;
+        // Password reset — only for non-self members (not managers)
+        if (!isMe && m.role !== 'manager') {
+            actionBtns += `<button class="btn btn-ghost reset-password-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="איפוס סיסמה">🔑</button>`;
+        }
+        // Remove — only for non-self
+        if (!isMe) {
+            actionBtns += `<button class="btn btn-ghost danger remove-member-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="הסר">✕</button>`;
+        }
+
         memberRows += `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--color-border)">
                 <div style="display:flex;align-items:center;gap:0.6rem">
                     <div class="member-avatar-thumb" data-name="${esc(m.name)}" style="cursor:pointer;border-radius:50%;overflow:hidden;flex-shrink:0">${avatarSvg}</div>
                     <div>
                         <strong>${esc(m.name)}</strong>
-                        <span style="color:var(--color-text-muted);font-size:0.85rem"> (${roleLabel})</span>
+                        <span style="color:var(--color-text-muted);font-size:0.85rem"> (${roleLabel}${isMe ? ' - את/ה' : ''})</span>
                         <div style="font-size:0.82rem;color:var(--color-text-muted)">${esc(identifier)}</div>
                     </div>
                 </div>
-                ${!isMe && m.role !== 'manager' ? `
-                    <div style="display:flex;gap:0.25rem">
-                        <button class="btn btn-ghost edit-avatar-member-btn" data-name="${esc(m.name)}" title="ערוך אווטאר">🎨</button>
-                        <button class="btn btn-ghost reset-password-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="איפוס סיסמה">🔑</button>
-                        <button class="btn btn-ghost danger remove-member-btn" data-uid="${esc(m.uid)}" data-name="${esc(m.name)}" title="הסר">✕</button>
-                    </div>
-                ` : ''}
+                <div style="display:flex;gap:0.25rem">
+                    ${actionBtns}
+                </div>
             </div>
         `;
     });
@@ -118,7 +234,8 @@ export function showManageMembersModal() {
         </div>
         <div style="margin-bottom:1rem">${memberRows}</div>
         <div class="modal-actions">
-            <button class="btn btn-primary" id="modal-add-member" style="margin-inline-end:auto">+ הוסף ילד/ה</button>
+            <button class="btn btn-primary" id="modal-add-member" style="margin-inline-end:0.5rem">+ ילד/ה</button>
+            <button class="btn btn-primary" id="modal-add-comanager" style="margin-inline-end:auto">+ הורה</button>
             <button class="btn btn-secondary" id="modal-cancel">סגור</button>
         </div>
     `;
@@ -129,6 +246,17 @@ export function showManageMembersModal() {
     modal.querySelector('#modal-add-member').addEventListener('click', () => {
         closeModal();
         showAddMemberModal();
+    });
+    modal.querySelector('#modal-add-comanager').addEventListener('click', () => {
+        closeModal();
+        showAddCoManagerModal();
+    });
+
+    modal.querySelectorAll('.rename-member-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal();
+            showRenameMemberModal(btn.dataset.uid, btn.dataset.name);
+        });
     });
 
     modal.querySelectorAll('.reset-password-btn').forEach(btn => {

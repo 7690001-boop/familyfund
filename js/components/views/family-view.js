@@ -134,6 +134,6 @@ function renderView() {
 
     summaryCards.render(
         _container.querySelector('[data-slot="summary"]'),
-        familySummary, family, '(משפחה) '
+        familySummary, family, visibleInvestments, '(משפחה) '
     );
 }

@@ -57,6 +57,12 @@ export default {
             return handleResetPassword(request, env, origin, allowedOrigin);
         }
 
+        // Member rename — POST only
+        if (url.pathname === '/rename-member') {
+            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
+            return handleRenameMember(request, env, origin, allowedOrigin);
+        }
+
         let upstreamUrl;
 
         if (url.pathname === '/search') {
@@ -332,9 +338,32 @@ async function createCustomToken(env, uid) {
     return `${toSign}.${encodedSig}`;
 }
 
+// ─── Rate-limit helper for password reset ────────────────────────────────────
+
+async function incrementResetRateLimit(env, rlKey) {
+    if (!env.RATE_LIMIT) return;
+    const rlData = await env.RATE_LIMIT.get(rlKey, 'json') || { failCount: 0, lockedUntil: 0 };
+    const newCount = rlData.failCount + 1;
+    const backoffS = calcBackoffSeconds(newCount);
+    const lockedUntil = backoffS > 0 ? Date.now() + backoffS * 1000 : 0;
+    const ttl = Math.max(backoffS + 60, 600);
+    await env.RATE_LIMIT.put(rlKey, JSON.stringify({ failCount: newCount, lockedUntil }), { expirationTtl: ttl });
+}
+
 // ─── Password Reset Handler ───────────────────────────────────────────────────
 
 async function handleResetPassword(request, env, origin, allowedOrigin) {
+    // 0. Rate-limit check (same mechanism as login)
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rlKey = `rl:reset:${ip}`;
+    if (env.RATE_LIMIT) {
+        const rlData = await env.RATE_LIMIT.get(rlKey, 'json') || { failCount: 0, lockedUntil: 0 };
+        if (rlData.lockedUntil > Date.now()) {
+            const retryAfter = Math.ceil((rlData.lockedUntil - Date.now()) / 1000);
+            return corsResponse(JSON.stringify({ error: 'Too many attempts', retryAfter }), 429, origin, allowedOrigin);
+        }
+    }
+
     // 1. Extract ID token
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -357,10 +386,16 @@ async function handleResetPassword(request, env, origin, allowedOrigin) {
         `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
     );
-    if (!lookupRes.ok) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    if (!lookupRes.ok) {
+        await incrementResetRateLimit(env, rlKey);
+        return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    }
     const lookupData = await lookupRes.json();
     const callerUid = lookupData.users?.[0]?.localId;
-    if (!callerUid) return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    if (!callerUid) {
+        await incrementResetRateLimit(env, rlKey);
+        return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    }
 
     // 4. Get service account access token
     let accessToken;
@@ -373,6 +408,7 @@ async function handleResetPassword(request, env, origin, allowedOrigin) {
     // 5. Verify caller is a manager
     const callerDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'users', callerUid);
     if (callerDoc?.role !== 'manager') {
+        await incrementResetRateLimit(env, rlKey);
         return corsResponse(JSON.stringify({ error: 'Permission denied: not a manager' }), 403, origin, allowedOrigin);
     }
 
@@ -399,6 +435,174 @@ async function handleResetPassword(request, env, origin, allowedOrigin) {
 
     console.log(`→ password reset OK for ${memberUid} by ${callerUid}`);
     return corsResponse(JSON.stringify({ success: true }), 200, origin, allowedOrigin);
+}
+
+// ─── Member Rename Handler ────────────────────────────────────────────────────
+//
+// Renames a member across all documents: member doc, user doc,
+// investments, goals, and simulations.
+// Caller must be the member themselves or a manager in the same family.
+
+async function handleRenameMember(request, env, origin, allowedOrigin) {
+    // 1. Extract ID token
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+        return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin, allowedOrigin);
+    }
+    const idToken = authHeader.slice(7);
+
+    // 2. Parse body
+    let body;
+    try { body = await request.json(); }
+    catch { return corsResponse(JSON.stringify({ error: 'Invalid JSON' }), 400, origin, allowedOrigin); }
+
+    const { memberUid, newName } = body;
+    if (!memberUid || !newName?.trim()) {
+        return corsResponse(JSON.stringify({ error: 'memberUid and newName required' }), 400, origin, allowedOrigin);
+    }
+
+    // 3. Verify caller
+    const lookupRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
+    );
+    if (!lookupRes.ok) {
+        return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    }
+    const lookupData = await lookupRes.json();
+    const callerUid = lookupData.users?.[0]?.localId;
+    if (!callerUid) {
+        return corsResponse(JSON.stringify({ error: 'Invalid token' }), 401, origin, allowedOrigin);
+    }
+
+    // 4. Get service account access token
+    let accessToken;
+    try { accessToken = await getServiceAccountToken(env); }
+    catch (e) {
+        console.error('SA token error:', e.message);
+        return corsResponse(JSON.stringify({ error: 'Server config error' }), 500, origin, allowedOrigin);
+    }
+
+    // 5. Get caller's user doc to find familyId and role
+    const callerDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'users', callerUid);
+    if (!callerDoc?.familyId) {
+        return corsResponse(JSON.stringify({ error: 'Caller has no family' }), 403, origin, allowedOrigin);
+    }
+
+    // 6. Permission check: caller is the member themselves OR a manager
+    const isSelf = callerUid === memberUid;
+    if (!isSelf && callerDoc.role !== 'manager') {
+        return corsResponse(JSON.stringify({ error: 'Permission denied' }), 403, origin, allowedOrigin);
+    }
+
+    // If not self, verify target is in same family
+    if (!isSelf) {
+        const targetDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'users', memberUid);
+        if (!targetDoc || targetDoc.familyId !== callerDoc.familyId) {
+            return corsResponse(JSON.stringify({ error: 'Target not in same family' }), 403, origin, allowedOrigin);
+        }
+    }
+
+    const familyId = callerDoc.familyId;
+    const projectId = env.FIREBASE_PROJECT_ID;
+    const basePath = `projects/${projectId}/databases/(default)/documents`;
+    const baseUrl = `https://firestore.googleapis.com/v1/${basePath}`;
+
+    // 7. Get old name from member doc
+    const memberDocUrl = `${baseUrl}/families/${familyId}/members/${memberUid}`;
+    const memberRes = await fetch(memberDocUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+    if (!memberRes.ok) {
+        return corsResponse(JSON.stringify({ error: 'Member not found' }), 404, origin, allowedOrigin);
+    }
+    const memberData = await memberRes.json();
+    const oldName = memberData.fields?.name?.stringValue;
+    if (!oldName) {
+        return corsResponse(JSON.stringify({ error: 'Member has no name' }), 400, origin, allowedOrigin);
+    }
+
+    const trimmedName = newName.trim();
+    if (oldName === trimmedName) {
+        return corsResponse(JSON.stringify({ success: true }), 200, origin, allowedOrigin);
+    }
+
+    // 8. Build batch writes
+    const writes = [];
+
+    // Update member doc name
+    writes.push({
+        update: {
+            name: `${basePath}/families/${familyId}/members/${memberUid}`,
+            fields: {
+                name: { stringValue: trimmedName },
+                updated_at: { stringValue: new Date().toISOString() },
+            },
+        },
+        updateMask: { fieldPaths: ['name', 'updated_at'] },
+    });
+
+    // Update user doc kidName + displayName
+    writes.push({
+        update: {
+            name: `${basePath}/users/${memberUid}`,
+            fields: {
+                kidName: { stringValue: trimmedName },
+                displayName: { stringValue: trimmedName },
+            },
+        },
+        updateMask: { fieldPaths: ['kidName', 'displayName'] },
+    });
+
+    // 9. Query investments, goals, simulations where kid = oldName and update them
+    for (const collectionId of ['investments', 'goals', 'simulations']) {
+        const queryUrl = `${baseUrl}/families/${familyId}:runQuery`;
+        const queryRes = await fetch(queryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+            body: JSON.stringify({
+                structuredQuery: {
+                    from: [{ collectionId }],
+                    where: {
+                        fieldFilter: {
+                            field: { fieldPath: 'kid' },
+                            op: 'EQUAL',
+                            value: { stringValue: oldName },
+                        },
+                    },
+                },
+            }),
+        });
+        if (queryRes.ok) {
+            const results = await queryRes.json();
+            for (const result of results) {
+                if (result.document) {
+                    writes.push({
+                        update: {
+                            name: result.document.name,
+                            fields: { kid: { stringValue: trimmedName } },
+                        },
+                        updateMask: { fieldPaths: ['kid'] },
+                    });
+                }
+            }
+        }
+    }
+
+    // 10. Commit all writes atomically
+    const commitUrl = `https://firestore.googleapis.com/v1/${basePath}:commit`;
+    const commitRes = await fetch(commitUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ writes }),
+    });
+
+    if (!commitRes.ok) {
+        const err = await commitRes.text();
+        console.error('Commit error:', err);
+        return corsResponse(JSON.stringify({ error: 'Failed to rename' }), 500, origin, allowedOrigin);
+    }
+
+    console.log(`→ rename OK: "${oldName}" → "${trimmedName}" in family ${familyId} (${writes.length} writes)`);
+    return corsResponse(JSON.stringify({ success: true, oldName, newName: trimmedName }), 200, origin, allowedOrigin);
 }
 
 // ─── Firestore REST helper ────────────────────────────────────────────────────
@@ -468,10 +672,15 @@ async function getServiceAccountToken(env) {
 // ─── CORS helpers ─────────────────────────────────────────────────────────────
 
 function isAllowedOrigin(origin, allowedOrigin) {
-    return origin === allowedOrigin
-        || origin === 'http://localhost'
-        || origin.startsWith('http://localhost:')
-        || origin.startsWith('http://127.0.0.1');
+    if (origin === allowedOrigin) return true;
+    // Only allow localhost origins when the configured origin is also localhost (dev mode)
+    const isDevMode = allowedOrigin.startsWith('http://localhost') || allowedOrigin.startsWith('http://127.0.0.1');
+    if (isDevMode) {
+        return origin === 'http://localhost'
+            || origin.startsWith('http://localhost:')
+            || origin.startsWith('http://127.0.0.1');
+    }
+    return false;
 }
 
 function corsHeaders(origin, allowedOrigin) {

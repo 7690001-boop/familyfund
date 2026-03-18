@@ -1,5 +1,6 @@
 // ============================================================
 // Goal List — savings goals section
+// Priority-based allocation: portfolio value fills goals in order.
 // ============================================================
 
 import { formatCurrency, formatDate } from '../../utils/format.js';
@@ -7,7 +8,7 @@ import { esc } from '../../utils/dom-helpers.js';
 import * as store from '../../store.js';
 
 export function render(container, goals, currentPortfolioValue, options = {}) {
-    const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete } = options;
+    const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete, onReorder } = options;
     const family = store.get('family') || {};
     const sym = family.currency_symbol || '₪';
 
@@ -29,12 +30,20 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
         return;
     }
 
+    // Sort goals by priority (lower = higher priority)
+    const sorted = [...goals].sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
+
+    // Allocate portfolio value across goals in priority order
+    let remaining = currentPortfolioValue;
     let goalsHtml = '';
-    goals.forEach(goal => {
+    sorted.forEach((goal, idx) => {
         const target = Number(goal.target_amount) || 0;
-        const pct = target > 0 ? Math.min(currentPortfolioValue / target, 1) : 0;
-        const pctDisplay = target > 0 ? Math.round((currentPortfolioValue / target) * 100) : 0;
-        const reached = target > 0 && currentPortfolioValue >= target;
+        const allocated = target > 0 ? Math.min(remaining, target) : 0;
+        remaining = Math.max(0, remaining - allocated);
+
+        const pct = target > 0 ? Math.min(allocated / target, 1) : 0;
+        const pctDisplay = target > 0 ? Math.round((allocated / target) * 100) : 0;
+        const reached = target > 0 && allocated >= target;
         const deadline = goal.deadline ? new Date(goal.deadline) : null;
         const overdue = deadline && deadline < new Date() && !reached;
 
@@ -45,6 +54,13 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
             </div>`;
         }
 
+        const reorderBtns = canEdit && sorted.length > 1 ? `
+            <span class="goal-reorder-btns">
+                <button class="btn btn-ghost goal-move-up" data-id="${esc(goal.id)}" ${idx === 0 ? 'disabled' : ''} title="העלה">▲</button>
+                <button class="btn btn-ghost goal-move-down" data-id="${esc(goal.id)}" ${idx === sorted.length - 1 ? 'disabled' : ''} title="הורד">▼</button>
+            </span>
+        ` : '';
+
         const editBtns = canEdit ? `
             <button class="btn btn-ghost edit-goal-btn" data-id="${esc(goal.id)}" title="ערוך">✎</button>
             <button class="btn btn-ghost danger del-goal-btn" data-id="${esc(goal.id)}" title="מחק">✕</button>
@@ -53,12 +69,15 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
         goalsHtml += `
             <div class="goal-card">
                 <div class="goal-header">
-                    <span class="goal-name">${esc(goal.goal_name)}
+                    <span class="goal-name">
+                        ${reorderBtns}
+                        <span class="goal-priority-num">${idx + 1}</span>
+                        ${esc(goal.goal_name)}
                         ${reached ? ' <span class="goal-reached-badge">היעד הושג!</span>' : ''}
                     </span>
                     <span class="goal-right">
                         <span class="goal-amounts">
-                            ${formatCurrency(currentPortfolioValue, sym)} / ${formatCurrency(target, sym)}
+                            ${formatCurrency(allocated, sym)} / ${formatCurrency(target, sym)}
                             (${pctDisplay}%)
                         </span>
                         ${editBtns}
@@ -95,6 +114,15 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
     if (canEdit && onDelete) {
         container.querySelectorAll('.del-goal-btn').forEach(btn => {
             btn.addEventListener('click', () => onDelete(btn.dataset.id));
+        });
+    }
+
+    if (canEdit && onReorder) {
+        container.querySelectorAll('.goal-move-up').forEach(btn => {
+            btn.addEventListener('click', () => onReorder(btn.dataset.id, 'up'));
+        });
+        container.querySelectorAll('.goal-move-down').forEach(btn => {
+            btn.addEventListener('click', () => onReorder(btn.dataset.id, 'down'));
         });
     }
 }

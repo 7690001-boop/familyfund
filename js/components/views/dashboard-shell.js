@@ -12,7 +12,7 @@ import * as investmentService from '../../services/investment-service.js';
 import * as goalService from '../../services/goal-service.js';
 import * as simulationService from '../../services/simulation-service.js';
 import * as priceService from '../../services/price-service.js';
-import { showAddMemberModal, showManageMembersModal } from '../modals/member-modals.js';
+import { showAddMemberModal, showManageMembersModal, showRenameMemberModal } from '../modals/member-modals.js';
 import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
 import { exportData, importData } from '../modals/data-transfer.js';
@@ -25,6 +25,7 @@ let _unsubs = [];
 let _activeTab = null;
 let _kidViewMod = null;
 let _familyViewMod = null;
+let _chatPanelMod = null;
 let _renderTimer = null;
 
 function debouncedRenderShell() {
@@ -75,6 +76,7 @@ export function unmount() {
     _unsubs = [];
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
     if (_familyViewMod) { _familyViewMod.unmount(); _familyViewMod = null; }
+    if (_chatPanelMod) { _chatPanelMod.unmount(); _chatPanelMod = null; }
     familyService.stopListening();
     investmentService.stopListening();
     goalService.stopListening();
@@ -134,6 +136,7 @@ function renderShell() {
             headerActions += `<button id="import-btn" class="btn btn-icon" title="ייבוא נתונים">⤒</button>`;
         }
     }
+    if (can(effectiveUser, 'feedback:send')) headerActions += `<button id="feedback-btn" class="btn btn-small" title="שלח משוב">💡 משוב</button>`;
     headerActions += `<button id="logout-btn" class="btn btn-icon" title="התנתק">🚪</button>`;
 
     const members = store.get('members') || [];
@@ -175,7 +178,7 @@ function renderShell() {
                             <button class="kid-id-edit-fab" id="edit-avatar-fab" title="ערוך אווטאר">✏️</button>
                         </div>
                     </div>
-                    <div class="kid-id-name">${esc(user.kidName)}</div>
+                    <div class="kid-id-name">${esc(user.kidName)} <button class="name-edit-btn" id="edit-name-fab" title="שנה שם">✏️</button></div>
                 </div>
             </div>`;
 
@@ -209,18 +212,29 @@ function renderShell() {
     _container.innerHTML = `
         ${headerHtml}
         <nav class="tabs-nav${isKidMode ? ' kid-mode-tabs' : ''}" id="dashboard-tabs">${tabsHtml}</nav>
-        ${visibleKids.length === 0 && user.role === 'manager' ? `
-            <div class="empty-app-state">
-                <h2>ברוכים הבאים!</h2>
-                <p>התחל בהוספת חבר משפחה כדי לעקוב אחרי ההשקעות</p>
-                <button id="empty-add-member-btn" class="btn btn-primary btn-large">+ הוסף חבר משפחה</button>
+        <div class="dashboard-layout">
+            <aside class="chat-panel-container" id="chat-panel-container"></aside>
+            <div class="dashboard-main">
+                ${visibleKids.length === 0 && user.role === 'manager' ? `
+                    <div class="empty-app-state">
+                        <h2>ברוכים הבאים!</h2>
+                        <p>התחל בהוספת חבר משפחה כדי לעקוב אחרי ההשקעות</p>
+                        <button id="empty-add-member-btn" class="btn btn-primary btn-large">+ הוסף חבר משפחה</button>
+                    </div>
+                ` : ''}
+                <main id="view-container"></main>
             </div>
-        ` : ''}
-        <main id="view-container"></main>
+        </div>
         <input type="file" id="import-file" accept=".json" hidden>
     `;
 
     wireShellEvents();
+
+    // Lazy-load and mount chat panel — fire-and-forget, never blocks dashboard
+    const chatContainer = _container.querySelector('#chat-panel-container');
+    if (chatContainer) {
+        mountChatPanel(chatContainer);
+    }
 
     if (visibleKids.length > 0 && (!_activeTab || !visibleKids.includes(_activeTab))) {
         switchTab(visibleKids[0]);
@@ -231,9 +245,35 @@ function renderShell() {
     }
 }
 
+async function mountChatPanel(container) {
+    try {
+        if (!_chatPanelMod) {
+            _chatPanelMod = await import('../ui/chat-panel.js');
+        }
+        // Container may have been replaced by a re-render while we were importing
+        const current = _container?.querySelector('#chat-panel-container');
+        if (current) {
+            _chatPanelMod.mount(current);
+        }
+    } catch (err) {
+        console.error('Chat panel failed to load:', err);
+    }
+}
+
 function wireShellEvents() {
     const user = store.get('user');
     const effectiveUser = isImpersonating() ? getParentUser() : user;
+
+    // Kid mode: edit name button → rename modal
+    const editNameBtn = _container.querySelector('#edit-name-fab');
+    if (editNameBtn) {
+        editNameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const members = store.get('members') || [];
+            const member = members.find(m => m.name === user.kidName);
+            if (member) showRenameMemberModal(member.uid || member.id, user.kidName);
+        });
+    }
 
     // Kid mode: jar area click → jar modal (stop propagation so card doesn't also fire)
     const kidJarDisplay = _container.querySelector('#kid-jar-display');
@@ -299,6 +339,14 @@ function wireShellEvents() {
         importBtn.addEventListener('click', () => importFile.click());
         importFile.addEventListener('change', (e) => {
             if (e.target.files[0]) { importData(e.target.files[0]); e.target.value = ''; }
+        });
+    }
+
+    const feedbackBtn = _container.querySelector('#feedback-btn');
+    if (feedbackBtn) {
+        feedbackBtn.addEventListener('click', async () => {
+            const { showFeedbackModal } = await import('../modals/feedback-modal.js');
+            showFeedbackModal();
         });
     }
 

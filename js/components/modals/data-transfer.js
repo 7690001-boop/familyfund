@@ -53,5 +53,8 @@ export function importData(file) {
             emit('toast', { message: 'שגיאה בקריאת הקובץ', type: 'error' });
         }
     };
+    reader.onerror = () => {
+        emit('toast', { message: 'שגיאה בקריאת הקובץ', type: 'error' });
+    };
     reader.readAsText(file);
 }

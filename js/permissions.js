@@ -4,6 +4,15 @@
 // ============================================================
 
 const RULES = {
+    // System admin permissions
+    'admin:view-families':       (user) => user.role === 'system',
+    'admin:manage-announcements':(user) => user.role === 'system',
+    'admin:view-feedback':       (user) => user.role === 'system',
+    'admin:manage-system':       (user) => user.role === 'system',
+
+    // Feedback — any family user can send
+    'feedback:send':         (user) => user.role === 'manager' || user.role === 'member',
+
     // Family management
     'family:edit':           (user) => user.role === 'manager',
 

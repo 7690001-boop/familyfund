@@ -17,6 +17,7 @@ import { showSimulationModal, deleteSimulation } from '../modals/simulation-moda
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { showAvatarModal } from '../modals/avatar-modal.js';
 import { togglePrivacy } from '../../services/family-service.js';
+import { showRenameMemberModal } from '../modals/member-modals.js';
 
 let _unsubs = [];
 let _container = null;
@@ -72,6 +73,7 @@ function renderView() {
     const matching = computeMatching(investments, family);
 
     const canEditAvatar = user.role === 'manager' || user.kidName === _kidName;
+    const canEditName = user.role === 'manager';
     const isPrivate = member?.private === true;
     const canTogglePrivacy = user.kidName === _kidName || user.role === 'manager';
 
@@ -82,7 +84,7 @@ function renderView() {
                 ${renderAvatar(avatarCfg, 72)}
                 ${canEditAvatar ? '<button class="avatar-edit-btn" id="edit-avatar-btn" title="ערוך אווטאר">✏️</button>' : ''}
             </div>
-            <h2 class="kid-header-name">${_kidName}</h2>
+            <h2 class="kid-header-name">${_kidName}${canEditName ? ` <button class="name-edit-btn" id="edit-name-btn" title="שנה שם">✏️</button>` : ''}</h2>
             ${canTogglePrivacy ? `
                 <label class="privacy-toggle" title="${isPrivate ? 'הסכומים מוסתרים מחברי משפחה אחרים' : 'הסכומים גלויים לכל המשפחה'}">
                     <input type="checkbox" id="privacy-checkbox" ${isPrivate ? 'checked' : ''}>
@@ -99,7 +101,7 @@ function renderView() {
 
     summaryCards.render(
         _container.querySelector('[data-slot="summary"]'),
-        summary, family
+        summary, family, investments
     );
 
     assetTable.render(
@@ -129,6 +131,10 @@ function renderView() {
                 if (g) showGoalModal(_kidName, g);
             },
             onDelete: (id) => deleteGoal(id),
+            onReorder: async (id, direction) => {
+                const { reorder } = await import('../../services/goal-service.js');
+                await reorder(user.familyId, id, direction, goals);
+            },
         }
     );
 
@@ -156,6 +162,11 @@ function renderView() {
     const editAvatarBtn = _container.querySelector('#edit-avatar-btn');
     if (editAvatarBtn) {
         editAvatarBtn.addEventListener('click', () => showAvatarModal(_kidName, avatarCfg));
+    }
+
+    const editNameBtn = _container.querySelector('#edit-name-btn');
+    if (editNameBtn && member) {
+        editNameBtn.addEventListener('click', () => showRenameMemberModal(member.uid || member.id, _kidName));
     }
 
     const privacyCheckbox = _container.querySelector('#privacy-checkbox');

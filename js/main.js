@@ -29,9 +29,11 @@ function spawnFloatingDecorations() {
         el.addEventListener('animationend', () => el.remove());
     }
 
-    // Spawn a few at start, then continuously
+    // Spawn a few at start, then continuously (cap to avoid waste)
     for (let i = 0; i < 5; i++) spawn();
-    setInterval(spawn, 5000);
+    setInterval(() => {
+        if (container.childElementCount < 15) spawn();
+    }, 5000);
 }
 
 async function boot() {

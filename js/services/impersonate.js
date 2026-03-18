@@ -15,9 +15,17 @@ export function getParentUser() {
     return _parentUser;
 }
 
+export function clearImpersonation() {
+    _parentUser = null;
+}
+
 export function switchToMember(kidName) {
     const user = store.get('user');
     if (!user || user.role !== 'manager') return;
+
+    // Validate kidName belongs to current family
+    const members = store.get('members') || [];
+    if (!members.some(m => m.name === kidName || m.kidName === kidName)) return;
 
     _parentUser = { ...user };
 

@@ -15,22 +15,29 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
     }
 
-    // Username → familyId lookup — publicly readable so kids can log in without family code
+    // Helper: check if the authenticated user is a system admin
+    function isSystemAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'system';
+    }
+
+    // Username -> familyId lookup -- publicly readable so kids can log in without family code
     match /usernames/{username} {
       allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // User profile lookup — each user can read/write their own doc
+    // User profile lookup -- each user can read/write their own doc; system admin can read/list any
     match /users/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow get: if request.auth != null && (request.auth.uid == uid || isSystemAdmin());
+      allow list: if request.auth != null && isSystemAdmin();
       allow create: if request.auth != null;
       allow update: if request.auth != null && request.auth.uid == uid;
     }
 
     match /families/{familyId} {
-      // Any authenticated family member can read the family doc
-      allow read: if request.auth != null && isFamilyMember(familyId);
+      // Any authenticated family member can read their family doc; system admin can read/list all
+      allow get: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
+      allow list: if request.auth != null && isSystemAdmin();
       // Anyone can create a family (manager creates on setup)
       allow create: if request.auth != null;
       // Only manager can update/delete
@@ -38,25 +45,25 @@ service cloud.firestore {
 
       // Members subcollection
       match /members/{memberId} {
-        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow read: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
         allow write: if request.auth != null && isManager(familyId);
-        // Allow initial write when creating family (manager adds themselves)
-        allow create: if request.auth != null;
+        // Allow initial write when creating family (manager adds themselves as first member)
+        allow create: if request.auth != null && request.auth.uid == memberId;
         // Members can update their own avatar and privacy setting
         allow update: if request.auth != null && request.auth.uid == memberId
                       && isFamilyMember(familyId)
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'jarType', 'private', 'updated_at']);
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'jarType', 'private', 'name', 'updated_at']);
       }
 
-      // Investments subcollection — only manager can write
+      // Investments subcollection -- only manager can write
       match /investments/{investmentId} {
-        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow read: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
         allow create, update, delete: if request.auth != null && isManager(familyId);
       }
 
-      // Goals subcollection — members can manage their own goals
+      // Goals subcollection -- members can manage their own goals
       match /goals/{goalId} {
-        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow read: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
         // Manager can do anything
         allow create, update, delete: if request.auth != null && isManager(familyId);
         // Members can create goals for themselves
@@ -67,9 +74,9 @@ service cloud.firestore {
                               && resource.data.kid_uid == request.auth.uid;
       }
 
-      // Simulations subcollection — members can manage their own
+      // Simulations subcollection -- members can manage their own
       match /simulations/{simulationId} {
-        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow read: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
         allow create, update, delete: if request.auth != null && isManager(familyId);
         allow create: if request.auth != null && isFamilyMember(familyId)
                       && request.resource.data.kid_uid == request.auth.uid;
@@ -77,10 +84,40 @@ service cloud.firestore {
                               && resource.data.kid_uid == request.auth.uid;
       }
 
-      // Prices cache — any member can read/write
+      // Prices cache -- any member can read/write
       match /prices/{doc} {
         allow read, write: if request.auth != null && isFamilyMember(familyId);
       }
+
+      // Chat topics -- any family member can read/create, only manager or author can delete
+      match /chatTopics/{topicId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create: if request.auth != null && isFamilyMember(familyId);
+        allow update: if request.auth != null && isFamilyMember(familyId);
+        allow delete: if request.auth != null && (isManager(familyId) || resource.data.created_by == request.auth.uid);
+
+        // Messages -- any family member can read/create; author can edit/delete own
+        match /messages/{messageId} {
+          allow read: if request.auth != null && isFamilyMember(familyId);
+          allow create: if request.auth != null && isFamilyMember(familyId);
+          allow update: if request.auth != null && isFamilyMember(familyId)
+                        && resource.data.author_uid == request.auth.uid;
+          allow delete: if request.auth != null && (isManager(familyId) || resource.data.author_uid == request.auth.uid);
+        }
+      }
+    }
+
+    // System announcements -- any authenticated user can read; system admin only write
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null && isSystemAdmin();
+    }
+
+    // User feedback -- any authenticated user can create; system admin manages; authors read own
+    match /feedback/{feedbackId} {
+      allow read: if request.auth != null && (isSystemAdmin() || resource.data.author_uid == request.auth.uid);
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && isSystemAdmin();
     }
   }
 }

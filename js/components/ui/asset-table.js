@@ -8,6 +8,39 @@ import { emit } from '../../event-bus.js';
 import * as store from '../../store.js';
 import { aggregateByTicker } from '../../utils/compute.js';
 
+let _currentSort = { key: 'purchase_date', dir: 'desc' };
+
+function sortInvestments(investments, sortKey, sortDir) {
+    const sorted = [...investments];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    sorted.sort((a, b) => {
+        let va, vb;
+        switch (sortKey) {
+            case 'purchase_date':
+                va = a.purchase_date || ''; vb = b.purchase_date || '';
+                return dir * va.localeCompare(vb);
+            case 'amount_invested':
+                va = a.amountInvested ?? 0; vb = b.amountInvested ?? 0;
+                return dir * (va - vb);
+            case 'current_value':
+                va = a.currentValueILS ?? 0; vb = b.currentValueILS ?? 0;
+                return dir * (va - vb);
+            case 'gain_loss':
+                va = a.gainLossILS ?? 0; vb = b.gainLossILS ?? 0;
+                return dir * (va - vb);
+            case 'gain_loss_pct':
+                va = a.gainLossPctILS ?? 0; vb = b.gainLossPctILS ?? 0;
+                return dir * (va - vb);
+            case 'name':
+                va = a.asset_name || a.ticker || ''; vb = b.asset_name || b.ticker || '';
+                return dir * va.localeCompare(vb, 'he');
+            default:
+                return 0;
+        }
+    });
+    return sorted;
+}
+
 export function render(container, investments, options = {}) {
     const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete } = options;
     const family = store.get('family') || {};
@@ -38,6 +71,10 @@ export function render(container, investments, options = {}) {
 
     let actionsHeader = '';
     if (canEdit) actionsHeader = '<th>פעולות</th>';
+
+    // Keep original for re-sort; work with sorted copy
+    const originalInvestments = investments;
+    investments = sortInvestments(investments, _currentSort.key, _currentSort.dir);
 
     // ── Consolidated positions (aggregate by ticker) ──────────────────────────
     const positions = aggregateByTicker(investments);
@@ -199,6 +236,20 @@ export function render(container, investments, options = {}) {
         </tr>`;
     });
 
+    const sortOptions = [
+        { key: 'purchase_date', label: 'תאריך' },
+        { key: 'name', label: 'שם' },
+        { key: 'amount_invested', label: 'הושקע' },
+        { key: 'current_value', label: 'שווי' },
+        { key: 'gain_loss', label: 'רווח/הפסד' },
+        { key: 'gain_loss_pct', label: '%' },
+    ];
+    const sortBarHtml = sortOptions.map(o => {
+        const active = _currentSort.key === o.key;
+        const arrow = active ? (_currentSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+        return `<button class="btn btn-ghost sort-btn${active ? ' active' : ''}" data-sort="${o.key}">${o.label}${arrow}</button>`;
+    }).join('');
+
     container.innerHTML = `
         <div class="section-header">
             <h2>פירוט נכסים</h2>
@@ -207,6 +258,7 @@ export function render(container, investments, options = {}) {
                 ${canAdd ? '<button class="btn btn-small btn-primary add-inv-btn">+ השקעה</button>' : ''}
             </div>
         </div>
+        <div class="sort-bar"><span class="sort-label">מיון:</span> ${sortBarHtml}</div>
         ${consolidatedHtml}
         ${hasMultiPurchase ? '<h3 class="section-sub-header">עסקאות</h3>' : ''}
         <div class="table-wrapper">
@@ -256,4 +308,17 @@ export function render(container, investments, options = {}) {
             fetchPrices(false);
         });
     }
+
+    // Sort buttons
+    container.querySelectorAll('.sort-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.sort;
+            if (_currentSort.key === key) {
+                _currentSort.dir = _currentSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _currentSort = { key, dir: 'desc' };
+            }
+            render(container, originalInvestments, options);
+        });
+    });
 }
