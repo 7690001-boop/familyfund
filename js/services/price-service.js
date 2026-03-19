@@ -181,7 +181,7 @@ async function _fetchPricesInner(silent) {
 
     if (prices.size > 0) {
         const user = store.get('user');
-        if (user?.familyId) {
+        if (user?.familyId && user?.role === 'manager') {
             const { updatePrices } = await import('./investment-service.js');
             await updatePrices(user.familyId, prices, currencies);
             await savePriceCache(user.familyId, prices, currencies, exchangeRates);

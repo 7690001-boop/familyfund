@@ -128,13 +128,12 @@ export function render(container, investments, options = {}) {
                 ? ` <span class="cell-line-sub">${t.assets.purchaseCount(pos.purchaseCount)}</span>` : '';
             const posHiddenBadge = showHiddenBadge && pos.someHidden
                 ? ` <span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
-            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}</span>${countBadge}`;
+            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}</span><span class="cell-line-sub asset-ticker">${esc(pos.ticker || '')}</span>${countBadge}`;
 
             posRows += `<tr${pos.someHidden ? ' class="asset-row-hidden"' : ''}>
                 <td>${nameCell}</td>
-                <td class="cell-number">${esc(pos.ticker || '—')}</td>
                 ${posFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
-                <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '—'}</td>
+                <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—'}</td>
                 <td class="cell-number">${investedCell}</td>
                 <td class="cell-number">${avgCell}</td>
                 <td class="cell-number">${priceCell}</td>
@@ -151,7 +150,6 @@ export function render(container, investments, options = {}) {
                     <thead>
                         <tr>
                             <th>${t.assets.headerAsset}</th>
-                            <th>${t.assets.headerTicker}</th>
                             ${posFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
                             <th>${t.assets.headerShares}</th>
                             <th>${t.assets.headerInvested}</th>
@@ -226,16 +224,18 @@ export function render(container, investments, options = {}) {
 
         const hiddenBadgeHtml = showHiddenBadge && inv.hidden
             ? `<span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
+        const sharesFormatted = typeof inv.shares === 'number'
+            ? inv.shares.toLocaleString('en-US', { maximumFractionDigits: 4 })
+            : (inv.shares || '—');
         const nameCell = inv.nickname
-            ? `<span class="cell-line-main">${esc(inv.nickname)}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span>`
-            : `${esc(inv.asset_name || '—')}${hiddenBadgeHtml}`;
+            ? `<span class="cell-line-main">${esc(inv.nickname)}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`
+            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${hiddenBadgeHtml}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`;
 
         rows += `<tr${inv.hidden ? ' class="asset-row-hidden"' : ''}>
             <td>${nameCell}</td>
-            <td class="cell-number">${esc(inv.ticker || '—')}</td>
             ${hasFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
             <td>${formatDate(inv.purchase_date)}</td>
-            <td class="cell-number">${inv.shares || '—'}</td>
+            <td class="cell-number">${sharesFormatted}</td>
             <td class="cell-number">${investedCell}</td>
             <td class="cell-number">${priceCell}</td>
             <td class="cell-number">${valueCell}</td>
@@ -275,7 +275,6 @@ export function render(container, investments, options = {}) {
                 <thead>
                     <tr>
                         <th>${t.assets.headerAsset}</th>
-                        <th>${t.assets.headerTicker}</th>
                         ${hasFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
                         <th>${t.assets.headerDate}</th>
                         <th>${t.assets.headerShares}</th>

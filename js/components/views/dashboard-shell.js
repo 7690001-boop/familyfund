@@ -209,7 +209,7 @@ function renderShell() {
             const active = _activeTab === kid ? ' active' : '';
             const member = members.find(m => m.name === kid);
             const avatarCfg = member?.avatar || DEFAULT_AVATAR;
-            const avatarSvg = renderAvatar(avatarCfg, 28);
+            const avatarSvg = renderAvatar(avatarCfg, 36);
             tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}</button>`;
         });
         if (visibleKids.length > 1) {
@@ -443,7 +443,7 @@ function updateTabAvatars() {
         const member = members.find(m => m.name === kidName);
         const avatarCfg = member?.avatar || DEFAULT_AVATAR;
         const avatarEl = btn.querySelector('.tab-avatar');
-        if (avatarEl) avatarEl.innerHTML = renderAvatar(avatarCfg, 28);
+        if (avatarEl) avatarEl.innerHTML = renderAvatar(avatarCfg, 36);
     });
     // Also update the kid-identity avatar and jar in the tabs-nav
     const user = store.get('user');
@@ -451,7 +451,9 @@ function updateTabAvatars() {
     if (heroAvatarEl) {
         const member = members.find(m => m.name === user?.kidName);
         const avatarCfg = member?.avatar || DEFAULT_AVATAR;
+        const editFab = heroAvatarEl.querySelector('.kid-id-edit-fab');
         heroAvatarEl.innerHTML = renderAvatar(avatarCfg, 92);
+        if (editFab) heroAvatarEl.appendChild(editFab);
     }
     const jarDisplay = _container.querySelector('#kid-jar-display');
     if (jarDisplay) {

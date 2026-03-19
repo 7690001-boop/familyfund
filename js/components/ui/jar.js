@@ -17,8 +17,8 @@ export const JAR_LABELS = {
 
 const JARS = {
     glass: (w, h) => `<svg viewBox="0 0 56 66" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-        <rect x="20" y="5" width="16" height="7" rx="3.5" fill="#d63031"/>
-        <rect x="13" y="10" width="30" height="10" rx="5" fill="#e17055"/>
+        <rect x="20" y="5" width="16" height="7" rx="3.5" fill="#ff8fab"/>
+        <rect x="13" y="10" width="30" height="10" rx="5" fill="#ffb3c6"/>
         <rect x="10" y="18" width="36" height="43" rx="11" fill="#dfe6e9" stroke="#b2bec3" stroke-width="1.5"/>
         <ellipse cx="28" cy="51" rx="13" ry="5" fill="#fdcb6e" opacity="0.65"/>
         <ellipse cx="28" cy="45" rx="13" ry="5" fill="#fdcb6e"/>
