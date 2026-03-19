@@ -6,6 +6,7 @@ import { formatCurrency } from '../../utils/format.js';
 import { esc } from '../../utils/dom-helpers.js';
 import { computeFixedRate, computeHistorical, yearlyFromMonthly } from '../../utils/compound.js';
 import * as store from '../../store.js';
+import t from '../../i18n.js';
 
 let _historicalData = null;
 let _inflationData = null;
@@ -45,12 +46,12 @@ export function render(container, simulations, options = {}) {
     if (simulations.length === 0) {
         container.innerHTML = `
             <div class="section-header">
-                <h2>סימולציית השקעה</h2>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-sim-btn">+ סימולציה</button>' : ''}
+                <h2>${t.simulation.titleSection}</h2>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-sim-btn">${t.simulation.addBtn}</button>` : ''}
             </div>
             <div class="empty-state">
-                <p>עדיין אין סימולציות — גלה את כוח הריבית דריבית!</p>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-first-sim-btn">+ צור סימולציה ראשונה</button>' : ''}
+                <p>${t.simulation.emptyDesc}</p>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-first-sim-btn">${t.simulation.addFirst}</button>` : ''}
             </div>
         `;
         wireAddBtn(container, onAdd, canAdd);
@@ -65,8 +66,8 @@ export function render(container, simulations, options = {}) {
 
     container.innerHTML = `
         <div class="section-header">
-            <h2>סימולציית השקעה</h2>
-            ${canAdd ? '<button class="btn btn-small btn-primary add-sim-btn">+ סימולציה</button>' : ''}
+            <h2>${t.simulation.titleSection}</h2>
+            ${canAdd ? `<button class="btn btn-small btn-primary add-sim-btn">${t.simulation.addBtn}</button>` : ''}
         </div>
         <div class="sim-cards-container">${cardsHtml}</div>
     `;
@@ -120,7 +121,7 @@ function wireTableToggle(card) {
             const table = card.querySelector('.sim-table-wrap');
             if (table) {
                 table.classList.toggle('collapsed');
-                btn.textContent = table.classList.contains('collapsed') ? 'הצג פירוט' : 'הסתר פירוט';
+                btn.textContent = table.classList.contains('collapsed') ? t.simulation.showDetail : t.simulation.hideDetail;
             }
         });
     });
@@ -153,15 +154,14 @@ function computeResults(sim, useRealInflation) {
 }
 
 function renderSimCard(sim, sym, inflationOn) {
-    const editBtn = `<button class="btn btn-ghost edit-sim-btn" data-id="${esc(sim.id)}" title="ערוך">✎</button>`;
-    const deleteBtn = `<button class="btn btn-ghost danger del-sim-btn" data-id="${esc(sim.id)}" title="מחק">✕</button>`;
+    const editBtn = `<button class="btn btn-ghost edit-sim-btn" data-id="${esc(sim.id)}" title="${t.common.edit}">✎</button>`;
+    const deleteBtn = `<button class="btn btn-ghost danger del-sim-btn" data-id="${esc(sim.id)}" title="${t.common.delete}">✕</button>`;
 
     let subtitle = '';
     if (sim.type === 'historical') {
-        const names = { sp500: 'S&P 500', total_us: 'שוק אמריקאי מלא', world: 'מדד עולמי' };
-        subtitle = `${names[sim.index_key] || sim.index_key} | ${sim.start_year || 2000}`;
+        subtitle = `${t.simulation.indexNames[sim.index_key] || sim.index_key} | ${sim.start_year || 2000}`;
     } else {
-        subtitle = `תשואה ${sim.annual_return_pct}%`;
+        subtitle = t.simulation.subtitleRate(sim.annual_return_pct);
     }
 
     // Input summary
@@ -170,9 +170,9 @@ function renderSimCard(sim, sym, inflationOn) {
     const years = sim.years || 0;
     const inputSummaryHtml = `
         <div class="sim-input-summary">
-            <span>סכום התחלתי: <strong dir="ltr">${formatCurrency(initial, sym)}</strong></span>
-            <span>הפקדה חודשית: <strong dir="ltr">${formatCurrency(monthly, sym)}</strong></span>
-            <span>תקופה: <strong>${years} שנים</strong></span>
+            <span>${t.simulation.inputInitial}<strong dir="ltr">${formatCurrency(initial, sym)}</strong></span>
+            <span>${t.simulation.inputMonthly}<strong dir="ltr">${formatCurrency(monthly, sym)}</strong></span>
+            <span><strong>${t.simulation.inputYears(years)}</strong></span>
         </div>
     `;
 
@@ -184,9 +184,9 @@ function renderSimCard(sim, sym, inflationOn) {
                     <span class="sim-card-subtitle">${subtitle}</span>
                 </div>
                 <div class="sim-card-actions">
-                    <label class="sim-inflation-label" title="התאמה לאינפלציה אמריקאית אמיתית">
+                    <label class="sim-inflation-label" title="${t.simulation.inflationTitle}">
                         <input type="checkbox" class="sim-inflation-toggle" data-id="${esc(sim.id)}" ${inflationOn ? 'checked' : ''}>
-                        <span>בניכוי אינפלציה</span>
+                        <span>${t.simulation.inflationToggle}</span>
                     </label>
                     ${editBtn}
                     ${deleteBtn}
@@ -202,7 +202,7 @@ function renderSimCard(sim, sym, inflationOn) {
 
 function renderSimBody(sim, sym, inflationOn) {
     const monthly = computeResults(sim, inflationOn);
-    if (monthly.length === 0) return '<p class="empty-state">אין מספיק נתונים לתקופה הנבחרת</p>';
+    if (monthly.length === 0) return `<p class="empty-state">${t.simulation.noData}</p>`;
 
     const yearly = yearlyFromMonthly(monthly);
     const last = monthly[monthly.length - 1];
@@ -215,15 +215,15 @@ function renderSimBody(sim, sym, inflationOn) {
     const summaryHtml = `
         <div class="sim-summary">
             <div class="sim-summary-card">
-                <span class="sim-summary-label">סה"כ הפקדות</span>
+                <span class="sim-summary-label">${t.simulation.totalDeposits}</span>
                 <span class="sim-summary-value">${formatCurrency(totalContributed, sym)}</span>
             </div>
             <div class="sim-summary-card highlight">
-                <span class="sim-summary-label">שווי סופי${inflationOn ? ' (ערך ריאלי)' : ''}</span>
+                <span class="sim-summary-label">${inflationOn ? t.simulation.finalValueReal : t.simulation.finalValue}</span>
                 <span class="sim-summary-value">${formatCurrency(totalValue, sym)}</span>
             </div>
             <div class="sim-summary-card ${earningsPositive ? 'earnings-positive' : 'earnings-negative'}">
-                <span class="sim-summary-label">רווח מריבית דריבית</span>
+                <span class="sim-summary-label">${t.simulation.compoundEarnings}</span>
                 <span class="sim-summary-value sim-wow-number">${formatCurrency(earnings, sym)}</span>
             </div>
         </div>
@@ -235,7 +235,7 @@ function renderSimBody(sim, sym, inflationOn) {
         const pctOfTotal = Math.round((earnings / totalValue) * 100);
         wowHtml = `
             <div class="sim-wow">
-                הכסף שלך עבד בשביליך! ${pctOfTotal}% מהסכום הסופי הגיע מריבית דריבית בלבד${inflationOn ? ' (בניכוי אינפלציה אמיתית)' : ''}!
+                ${t.simulation.wowText(pctOfTotal, inflationOn ? t.simulation.wowRealSuffix : '')}
             </div>
         `;
     }
@@ -246,11 +246,11 @@ function renderSimBody(sim, sym, inflationOn) {
     for (const y of yearly) {
         const contribPct = maxVal > 0 ? (y.totalContributed / maxVal * 100) : 0;
         const earningsPct = maxVal > 0 ? (Math.max(0, y.cumulativeEarnings) / maxVal * 100) : 0;
-        const yearLabel = y.date ? y.date.slice(0, 4) : `שנה ${y.year}`;
+        const yearLabel = y.date ? y.date.slice(0, 4) : t.simulation.yearLabel(y.year);
         const showLabel = yearly.length <= 15 || y.year % Math.ceil(yearly.length / 15) === 0 || y.year === yearly.length;
 
         barsHtml += `
-            <div class="sim-bar-col" title="שנה ${y.year}: ${formatCurrency(y.totalValue, sym)}">
+            <div class="sim-bar-col" title="${t.simulation.barTitle(y.year, formatCurrency(y.totalValue, sym))}">
                 <div class="sim-bar-stack">
                     <div class="sim-bar-earnings" style="height:${earningsPct}%"></div>
                     <div class="sim-bar-contrib" style="height:${contribPct}%"></div>
@@ -262,8 +262,8 @@ function renderSimBody(sim, sym, inflationOn) {
 
     const chartHtml = `
         <div class="sim-chart-legend">
-            <span class="sim-legend-item"><span class="sim-legend-dot contrib"></span>הפקדות</span>
-            <span class="sim-legend-item"><span class="sim-legend-dot earnings"></span>ריבית דריבית</span>
+            <span class="sim-legend-item"><span class="sim-legend-dot contrib"></span>${t.simulation.legendDeposits}</span>
+            <span class="sim-legend-item"><span class="sim-legend-dot earnings"></span>${t.simulation.legendEarnings}</span>
         </div>
         <div class="sim-bar-chart">${barsHtml}</div>
     `;
@@ -271,7 +271,7 @@ function renderSimBody(sim, sym, inflationOn) {
     // Year-by-year table
     let tableRows = '';
     for (const y of yearly) {
-        const yearLabel = y.date ? y.date.slice(0, 4) : `שנה ${y.year}`;
+        const yearLabel = y.date ? y.date.slice(0, 4) : t.simulation.yearLabel(y.year);
         tableRows += `
             <tr>
                 <td>${yearLabel}</td>
@@ -283,11 +283,11 @@ function renderSimBody(sim, sym, inflationOn) {
     }
 
     const tableHtml = `
-        <button class="btn btn-ghost sim-table-toggle">הצג פירוט</button>
+        <button class="btn btn-ghost sim-table-toggle">${t.simulation.showDetail}</button>
         <div class="sim-table-wrap collapsed">
             <table class="sim-table">
                 <thead>
-                    <tr><th>שנה</th><th>הפקדות</th><th>שווי</th><th>רווח</th></tr>
+                    <tr><th>${t.simulation.tableYear}</th><th>${t.simulation.tableDeposits}</th><th>${t.simulation.tableValue}</th><th>${t.simulation.tableEarnings}</th></tr>
                 </thead>
                 <tbody>${tableRows}</tbody>
             </table>

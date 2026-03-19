@@ -9,6 +9,7 @@ import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
 import * as familyService from '../../services/family-service.js';
 import { JAR_TYPES, JAR_LABELS, renderJar } from '../ui/jar.js';
+import t from '../../i18n.js';
 
 export function showJarModal(kidName, currentJarType = 'glass') {
     let selected = currentJarType;
@@ -19,9 +20,9 @@ export function showJarModal(kidName, currentJarType = 'glass') {
     function updateStatus(status) {
         const el = document.getElementById('jar-save-status');
         if (!el) return;
-        if (status === 'saving') { el.textContent = 'שומר...'; el.className = 'avatar-save-status saving'; }
-        else if (status === 'saved') { el.textContent = '✓ נשמר'; el.className = 'avatar-save-status saved'; }
-        else if (status === 'error') { el.textContent = '⚠ שגיאה'; el.className = 'avatar-save-status error'; }
+        if (status === 'saving') { el.textContent = t.common.saving; el.className = 'avatar-save-status saving'; }
+        else if (status === 'saved') { el.textContent = t.common.saved; el.className = 'avatar-save-status saved'; }
+        else if (status === 'error') { el.textContent = t.common.error; el.className = 'avatar-save-status error'; }
         else { el.textContent = ''; el.className = 'avatar-save-status'; }
     }
 
@@ -43,7 +44,7 @@ export function showJarModal(kidName, currentJarType = 'glass') {
                 console.error('Failed to save jar:', e);
                 if (gen === saveGeneration) {
                     updateStatus('error');
-                    emit('toast', { message: 'שגיאה בשמירת החסכון', type: 'error' });
+                    emit('toast', { message: t.errors.saveJarError, type: 'error' });
                 }
             }
         }, 400);
@@ -59,7 +60,7 @@ export function showJarModal(kidName, currentJarType = 'glass') {
     }
 
     const html = `
-        <h2>בחר חסכון</h2>
+        <h2>${t.jar.title}</h2>
         <div class="jar-modal-preview">
             <div id="jar-big-preview" class="jar-big-preview">${renderJar(selected, 90)}</div>
             <div class="jar-big-preview-name" id="jar-big-preview-name">${JAR_LABELS[selected]}</div>
@@ -69,7 +70,7 @@ export function showJarModal(kidName, currentJarType = 'glass') {
         </div>
         <div class="modal-actions">
             <span class="avatar-save-status" id="jar-save-status"></span>
-            <button class="btn btn-secondary" id="jar-cancel-btn">בטל שינויים</button>
+            <button class="btn btn-secondary" id="jar-cancel-btn">${t.jar.cancel}</button>
         </div>`;
 
     openModal(html);

@@ -7,6 +7,7 @@ import * as store from '../../store.js';
 import { esc } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import * as adminService from '../../services/admin-service.js';
+import t from '../../i18n.js';
 
 let _container = null;
 let _unsubs = [];
@@ -69,15 +70,15 @@ function renderShell() {
         <div class="admin-view">
             <header class="admin-header">
                 <div class="admin-header-content">
-                    <h1 class="admin-title">ניהול מערכת — Family Money</h1>
-                    <button id="admin-logout-btn" class="btn btn-icon" title="התנתק">🚪</button>
+                    <h1 class="admin-title">${t.admin.title}</h1>
+                    <button id="admin-logout-btn" class="btn btn-icon" title="${t.admin.logoutTitle}">🚪</button>
                 </div>
             </header>
             <nav class="admin-tabs" id="admin-tabs">
-                <button class="admin-tab${_activeTab === 'overview' ? ' active' : ''}" data-tab="overview">סקירה</button>
-                <button class="admin-tab${_activeTab === 'families' ? ' active' : ''}" data-tab="families">משפחות</button>
-                <button class="admin-tab${_activeTab === 'announcements' ? ' active' : ''}" data-tab="announcements">עדכונים</button>
-                <button class="admin-tab${_activeTab === 'feedback' ? ' active' : ''}" data-tab="feedback">משוב ${pendingBadge}</button>
+                <button class="admin-tab${_activeTab === 'overview' ? ' active' : ''}" data-tab="overview">${t.admin.tabOverview}</button>
+                <button class="admin-tab${_activeTab === 'families' ? ' active' : ''}" data-tab="families">${t.admin.tabFamilies}</button>
+                <button class="admin-tab${_activeTab === 'announcements' ? ' active' : ''}" data-tab="announcements">${t.admin.tabAnnouncements}</button>
+                <button class="admin-tab${_activeTab === 'feedback' ? ' active' : ''}" data-tab="feedback">${t.admin.tabFeedback} ${pendingBadge}</button>
             </nav>
             <main class="admin-content" id="admin-content"></main>
         </div>
@@ -136,24 +137,24 @@ function renderOverview() {
         <div class="admin-stats-grid">
             <div class="admin-stat-card">
                 <div class="admin-stat-number">${_stats?.familyCount ?? families.length}</div>
-                <div class="admin-stat-label">משפחות</div>
+                <div class="admin-stat-label">${t.admin.statFamilies}</div>
             </div>
             <div class="admin-stat-card">
                 <div class="admin-stat-number">${_stats?.userCount ?? '—'}</div>
-                <div class="admin-stat-label">משתמשים</div>
+                <div class="admin-stat-label">${t.admin.statUsers}</div>
             </div>
             <div class="admin-stat-card admin-stat-card-accent">
                 <div class="admin-stat-number">${pendingCount}</div>
-                <div class="admin-stat-label">משוב ממתין</div>
+                <div class="admin-stat-label">${t.admin.statPendingFeedback}</div>
             </div>
             <div class="admin-stat-card">
                 <div class="admin-stat-number">${announcements.length}</div>
-                <div class="admin-stat-label">עדכונים</div>
+                <div class="admin-stat-label">${t.admin.statAnnouncements}</div>
             </div>
         </div>
         ${pendingCount > 0 ? `
             <div class="admin-section">
-                <h3>משוב אחרון</h3>
+                <h3>${t.admin.latestFeedback}</h3>
                 ${feedback.filter(f => f.status === 'new').slice(0, 5).map(f => `
                     <div class="admin-feedback-preview">
                         <span class="admin-feedback-type-badge admin-type-${esc(f.type)}">${typeLabel(f.type)}</span>
@@ -174,7 +175,7 @@ function renderFamilies() {
     const families = store.get('adminFamilies') || [];
 
     if (families.length === 0) {
-        return '<p class="admin-empty">אין משפחות במערכת</p>';
+        return `<p class="admin-empty">${t.admin.noFamilies}</p>`;
     }
 
     return `
@@ -201,18 +202,18 @@ function renderFamilies() {
 }
 
 function renderFamilyMembers(familyId, members) {
-    if (!members) return '<div class="admin-family-members"><p class="admin-loading">טוען חברים...</p></div>';
-    if (members.length === 0) return '<div class="admin-family-members"><p class="admin-empty">אין חברים</p></div>';
+    if (!members) return `<div class="admin-family-members"><p class="admin-loading">${t.admin.loadingMembers}</p></div>`;
+    if (members.length === 0) return `<div class="admin-family-members"><p class="admin-empty">${t.admin.noMembers}</p></div>`;
 
     return `
         <div class="admin-family-members">
             <table class="admin-table">
-                <thead><tr><th>שם</th><th>תפקיד</th><th>אימייל</th><th>שם משתמש</th></tr></thead>
+                <thead><tr><th>${t.admin.memberColName}</th><th>${t.admin.memberColRole}</th><th>${t.admin.memberColEmail}</th><th>${t.admin.memberColUsername}</th></tr></thead>
                 <tbody>
                     ${members.map(m => `
                         <tr>
                             <td>${esc(m.name || '—')}</td>
-                            <td><span class="admin-role-badge admin-role-${esc(m.role)}">${m.role === 'manager' ? 'הורה' : 'ילד/ה'}</span></td>
+                            <td><span class="admin-role-badge admin-role-${esc(m.role)}">${m.role === 'manager' ? t.admin.roleParent : t.admin.roleKid}</span></td>
                             <td dir="ltr" style="font-size:0.8rem">${esc(m.email || '—')}</td>
                             <td dir="ltr">${esc(m.username || '—')}</td>
                         </tr>
@@ -250,7 +251,7 @@ function renderAnnouncements() {
 
     return `
         <div class="admin-announcements">
-            ${!_editingAnnouncementId ? `<button class="btn btn-primary admin-add-btn" id="add-announcement-btn">+ עדכון חדש</button>` : ''}
+            ${!_editingAnnouncementId ? `<button class="btn btn-primary admin-add-btn" id="add-announcement-btn">${t.admin.addAnnouncementBtn}</button>` : ''}
             ${isNew || editingAnn ? renderAnnouncementForm(editingAnn) : ''}
             ${announcements.map(a => `
                 <div class="admin-announcement-card${_editingAnnouncementId === a.id ? ' editing' : ''}">
@@ -263,12 +264,12 @@ function renderAnnouncements() {
                         ${(a.items || []).map(item => `<li>${esc(item)}</li>`).join('')}
                     </ul>
                     <div class="admin-announcement-actions">
-                        <button class="btn btn-small admin-edit-ann" data-id="${esc(a.id)}">ערוך</button>
-                        <button class="btn btn-small btn-danger admin-delete-ann" data-id="${esc(a.id)}">מחק</button>
+                        <button class="btn btn-small admin-edit-ann" data-id="${esc(a.id)}">${t.admin.editBtn}</button>
+                        <button class="btn btn-small btn-danger admin-delete-ann" data-id="${esc(a.id)}">${t.admin.deleteBtn}</button>
                     </div>
                 </div>
             `).join('')}
-            ${announcements.length === 0 && !_editingAnnouncementId ? '<p class="admin-empty">אין עדכונים</p>' : ''}
+            ${announcements.length === 0 && !_editingAnnouncementId ? `<p class="admin-empty">${t.admin.noAnnouncements}</p>` : ''}
         </div>
     `;
 }
@@ -277,28 +278,28 @@ function renderAnnouncementForm(existing) {
     const v = existing || { version: '', title: '', date: new Date().toISOString().slice(0, 10), items: [] };
     return `
         <div class="admin-form-card" id="announcement-form">
-            <h3>${existing ? 'עריכת עדכון' : 'עדכון חדש'}</h3>
+            <h3>${existing ? t.admin.editAnnouncementTitle : t.admin.newAnnouncementTitle}</h3>
             <div class="admin-form-row">
                 <div class="form-group">
-                    <label>גרסה</label>
+                    <label>${t.admin.versionLabel}</label>
                     <input type="text" id="ann-version" value="${esc(v.version)}" placeholder="1.3.0" dir="ltr">
                 </div>
                 <div class="form-group">
-                    <label>תאריך</label>
+                    <label>${t.admin.dateLabel}</label>
                     <input type="date" id="ann-date" value="${esc(v.date)}" dir="ltr">
                 </div>
             </div>
             <div class="form-group">
-                <label>כותרת</label>
-                <input type="text" id="ann-title" value="${esc(v.title)}" placeholder="שם העדכון">
+                <label>${t.admin.titleLabel}</label>
+                <input type="text" id="ann-title" value="${esc(v.title)}" placeholder="${t.admin.namePlaceholder}">
             </div>
             <div class="form-group">
-                <label>פריטים (שורה לכל פריט)</label>
-                <textarea id="ann-items" rows="4" placeholder="פריט ראשון&#10;פריט שני&#10;פריט שלישי">${esc((v.items || []).join('\n'))}</textarea>
+                <label>${t.admin.itemsLabel}</label>
+                <textarea id="ann-items" rows="4" placeholder="${t.admin.itemsPlaceholder}">${esc((v.items || []).join('\n'))}</textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" id="ann-cancel">ביטול</button>
-                <button class="btn btn-primary" id="ann-save">${existing ? 'שמור' : 'צור'}</button>
+                <button class="btn btn-secondary" id="ann-cancel">${t.common.cancel}</button>
+                <button class="btn btn-primary" id="ann-save">${existing ? t.common.save : t.admin.createBtn}</button>
             </div>
         </div>
     `;
@@ -322,7 +323,7 @@ function wireAnnouncementEvents(el) {
         const items = el.querySelector('#ann-items').value.split('\n').map(s => s.trim()).filter(Boolean);
 
         if (!version || !title) {
-            emit('toast', { message: 'יש למלא גרסה וכותרת', type: 'error' });
+            emit('toast', { message: t.errors.fillVersionAndTitle, type: 'error' });
             return;
         }
 
@@ -332,15 +333,15 @@ function wireAnnouncementEvents(el) {
         try {
             if (_editingAnnouncementId === '__new__') {
                 await adminService.createAnnouncement({ version, title, date, items });
-                emit('toast', { message: 'עדכון נוצר', type: 'success' });
+                emit('toast', { message: t.admin.announcementCreated, type: 'success' });
             } else {
                 await adminService.updateAnnouncement(_editingAnnouncementId, { version, title, date, items });
-                emit('toast', { message: 'עדכון נשמר', type: 'success' });
+                emit('toast', { message: t.admin.announcementSaved, type: 'success' });
             }
             _editingAnnouncementId = null;
         } catch (e) {
             console.error('Save announcement failed:', e);
-            emit('toast', { message: 'שגיאה בשמירה', type: 'error' });
+            emit('toast', { message: t.errors.announcementSaveError, type: 'error' });
             btn.disabled = false;
         }
     });
@@ -354,12 +355,12 @@ function wireAnnouncementEvents(el) {
 
     el.querySelectorAll('.admin-delete-ann').forEach(btn => {
         btn.addEventListener('click', async () => {
-            if (!confirm('למחוק את העדכון?')) return;
+            if (!confirm(t.admin.deleteAnnouncementConfirm)) return;
             try {
                 await adminService.deleteAnnouncement(btn.dataset.id);
-                emit('toast', { message: 'עדכון נמחק', type: 'success' });
+                emit('toast', { message: t.admin.announcementDeleted, type: 'success' });
             } catch (e) {
-                emit('toast', { message: 'שגיאה במחיקה', type: 'error' });
+                emit('toast', { message: t.errors.deleteError, type: 'error' });
             }
         });
     });
@@ -369,18 +370,18 @@ function wireAnnouncementEvents(el) {
 
 function typeLabel(type) {
     switch (type) {
-        case 'idea': return '💡 רעיון';
-        case 'bug': return '🐛 באג';
-        case 'improvement': return '✨ שיפור';
-        default: return '💬 אחר';
+        case 'idea': return t.admin.typeIdea;
+        case 'bug': return t.admin.typeBug;
+        case 'improvement': return t.admin.typeImprovement;
+        default: return t.admin.typeOther;
     }
 }
 
 function statusLabel(status) {
     switch (status) {
-        case 'new': return 'חדש';
-        case 'read': return 'נקרא';
-        case 'resolved': return 'טופל';
+        case 'new': return t.admin.statusNew;
+        case 'read': return t.admin.statusRead;
+        case 'resolved': return t.admin.statusResolved;
         default: return status;
     }
 }
@@ -395,12 +396,12 @@ function renderFeedback() {
     return `
         <div class="admin-feedback">
             <div class="admin-feedback-filters">
-                <button class="admin-filter-btn${_feedbackFilter === 'all' ? ' active' : ''}" data-filter="all">הכל (${counts.all})</button>
-                <button class="admin-filter-btn${_feedbackFilter === 'new' ? ' active' : ''}" data-filter="new">חדש (${counts.new})</button>
-                <button class="admin-filter-btn${_feedbackFilter === 'read' ? ' active' : ''}" data-filter="read">נקרא (${counts.read})</button>
-                <button class="admin-filter-btn${_feedbackFilter === 'resolved' ? ' active' : ''}" data-filter="resolved">טופל (${counts.resolved})</button>
+                <button class="admin-filter-btn${_feedbackFilter === 'all' ? ' active' : ''}" data-filter="all">${t.admin.filterAll(counts.all)}</button>
+                <button class="admin-filter-btn${_feedbackFilter === 'new' ? ' active' : ''}" data-filter="new">${t.admin.filterNew(counts.new)}</button>
+                <button class="admin-filter-btn${_feedbackFilter === 'read' ? ' active' : ''}" data-filter="read">${t.admin.filterRead(counts.read)}</button>
+                <button class="admin-filter-btn${_feedbackFilter === 'resolved' ? ' active' : ''}" data-filter="resolved">${t.admin.filterResolved(counts.resolved)}</button>
             </div>
-            ${feedback.length === 0 ? '<p class="admin-empty">אין משוב</p>' : ''}
+            ${feedback.length === 0 ? `<p class="admin-empty">${t.admin.noFeedback}</p>` : ''}
             ${feedback.map(f => {
                 const isExpanded = _expandedFeedbackId === f.id;
                 return `
@@ -419,17 +420,17 @@ function renderFeedback() {
                             <div class="admin-feedback-detail">
                                 <div class="admin-feedback-full-text">${esc(f.text)}</div>
                                 <div class="form-group" style="margin-top:0.75rem">
-                                    <label>הערות מנהל</label>
-                                    <textarea class="form-input admin-notes-input" rows="2" placeholder="הערות פנימיות...">${esc(f.admin_notes || '')}</textarea>
+                                    <label>${t.admin.adminNotesLabel}</label>
+                                    <textarea class="form-input admin-notes-input" rows="2" placeholder="${t.admin.adminNotesPlaceholder}">${esc(f.admin_notes || '')}</textarea>
                                 </div>
                                 <div class="admin-feedback-actions">
                                     <select class="form-input admin-status-select" style="width:auto">
-                                        <option value="new"${f.status === 'new' ? ' selected' : ''}>חדש</option>
-                                        <option value="read"${f.status === 'read' ? ' selected' : ''}>נקרא</option>
-                                        <option value="resolved"${f.status === 'resolved' ? ' selected' : ''}>טופל</option>
+                                        <option value="new"${f.status === 'new' ? ' selected' : ''}>${t.admin.statusNew}</option>
+                                        <option value="read"${f.status === 'read' ? ' selected' : ''}>${t.admin.statusRead}</option>
+                                        <option value="resolved"${f.status === 'resolved' ? ' selected' : ''}>${t.admin.statusResolved}</option>
                                     </select>
-                                    <button class="btn btn-primary btn-small admin-save-feedback" data-id="${esc(f.id)}">שמור</button>
-                                    <button class="btn btn-small btn-danger admin-delete-feedback" data-id="${esc(f.id)}">מחק</button>
+                                    <button class="btn btn-primary btn-small admin-save-feedback" data-id="${esc(f.id)}">${t.admin.saveFeedbackBtn}</button>
+                                    <button class="btn btn-small btn-danger admin-delete-feedback" data-id="${esc(f.id)}">${t.admin.deleteFeedbackBtn}</button>
                                 </div>
                             </div>
                         ` : ''}
@@ -469,9 +470,9 @@ function wireFeedbackEvents(el) {
             btn.disabled = true;
             try {
                 await adminService.updateFeedbackStatus(id, status, notes);
-                emit('toast', { message: 'משוב עודכן', type: 'success' });
+                emit('toast', { message: t.admin.feedbackUpdated, type: 'success' });
             } catch (e) {
-                emit('toast', { message: 'שגיאה בעדכון', type: 'error' });
+                emit('toast', { message: t.errors.feedbackUpdateError, type: 'error' });
                 btn.disabled = false;
             }
         });
@@ -481,13 +482,13 @@ function wireFeedbackEvents(el) {
     el.querySelectorAll('.admin-delete-feedback').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!confirm('למחוק את המשוב?')) return;
+            if (!confirm(t.admin.deleteFeedbackConfirm)) return;
             try {
                 await adminService.deleteFeedback(btn.dataset.id);
                 _expandedFeedbackId = null;
-                emit('toast', { message: 'משוב נמחק', type: 'success' });
+                emit('toast', { message: t.admin.feedbackDeleted, type: 'success' });
             } catch (e) {
-                emit('toast', { message: 'שגיאה במחיקה', type: 'error' });
+                emit('toast', { message: t.errors.deleteError, type: 'error' });
             }
         });
     });

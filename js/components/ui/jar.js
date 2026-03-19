@@ -3,14 +3,16 @@
 // Kids can pick their savings "jar" type via the jar modal.
 // ============================================================
 
+import t from '../../i18n.js';
+
 export const JAR_TYPES = ['glass', 'piggy', 'bag', 'chest', 'safe'];
 
 export const JAR_LABELS = {
-    glass: 'צנצנת',
-    piggy: 'קופת חזיר',
-    bag:   'שק כסף',
-    chest: 'ארגז אוצר',
-    safe:  'כספת',
+    glass: t.jar.glass,
+    piggy: t.jar.piggy,
+    bag:   t.jar.bag,
+    chest: t.jar.chest,
+    safe:  t.jar.safe,
 };
 
 const JARS = {

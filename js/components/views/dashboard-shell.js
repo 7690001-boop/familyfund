@@ -19,6 +19,7 @@ import { exportData, importData } from '../modals/data-transfer.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { renderJar, JAR_LABELS } from '../ui/jar.js';
 import { switchToMember, switchBack, isImpersonating, getParentUser } from '../../services/impersonate.js';
+import t from '../../i18n.js';
 
 let _container = null;
 let _unsubs = [];
@@ -52,10 +53,18 @@ export async function mount(container) {
 
     let _lastRole = user.role;
     let _lastKidName = user.kidName;
+    let _lastChatDisabled = store.get('family')?.chatDisabled ?? false;
 
     _unsubs.push(
         store.subscribe('kids', () => debouncedRenderShell()),
-        store.subscribe('family', () => updateTitle()),
+        store.subscribe('family', (f) => {
+            updateTitle();
+            const chatDisabled = f?.chatDisabled ?? false;
+            if (chatDisabled !== _lastChatDisabled) {
+                _lastChatDisabled = chatDisabled;
+                debouncedRenderShell();
+            }
+        }),
         store.subscribe('members', () => updateTabAvatars()),
         store.subscribe('priceLastUpdate', () => updatePriceStatus()),
         store.subscribe('user', (u) => {
@@ -111,33 +120,33 @@ function renderShell() {
     const lastUpdate = store.get('priceLastUpdate');
     if (lastUpdate) {
         const d = new Date(lastUpdate);
-        headerActions += `<span class="price-status">מחירים: ${d.toLocaleTimeString('he-IL')}</span>`;
+        headerActions += `<span class="price-status">${t.common.priceStatus(d.toLocaleTimeString('he-IL'))}</span>`;
     }
 
     // "View as" dropdown for managers (always visible, even while impersonating)
     if (effectiveUser.role === 'manager' && kids.length > 0) {
         const currentKid = impersonating ? user.kidName : '';
-        let options = `<option value="">👁 תצוגת הורה</option>`;
+        let options = `<option value="">${t.dashboard.viewAsParent}</option>`;
         kids.forEach(kid => {
             const sel = kid === currentKid ? ' selected' : '';
-            options += `<option value="${esc(kid)}"${sel}>👁 צפה כ-${esc(kid)}</option>`;
+            options += `<option value="${esc(kid)}"${sel}>${t.dashboard.viewAsKid(esc(kid))}</option>`;
         });
-        headerActions += `<select id="view-as-select" class="view-as-select" title="החלף תצוגה">${options}</select>`;
+        headerActions += `<select id="view-as-select" class="view-as-select" title="${t.dashboard.switchViewTitle}">${options}</select>`;
     }
 
     // When impersonating, hide all manager actions — show only the dropdown + logout
     // so the parent sees exactly what the kid sees
     if (!impersonating) {
-        if (can(effectiveUser, 'kid:create'))    headerActions += `<button id="add-kid-btn" class="btn btn-small" title="הוסף ילד/ה">+ ילד/ה</button>`;
-        if (can(effectiveUser, 'member:create')) headerActions += `<button id="manage-members-btn" class="btn btn-small" title="ניהול חברי משפחה">👥 חברים</button>`;
-        if (can(effectiveUser, 'settings:view')) headerActions += `<button id="settings-btn" class="btn btn-icon" title="הגדרות">⚙</button>`;
+        if (can(effectiveUser, 'kid:create'))    headerActions += `<button id="add-kid-btn" class="btn btn-small" title="${t.members.addKidTitle}">${t.dashboard.addKid}</button>`;
+        if (can(effectiveUser, 'member:create')) headerActions += `<button id="manage-members-btn" class="btn btn-small" title="${t.members.manageTitle}">${t.dashboard.manageMembers}</button>`;
+        if (can(effectiveUser, 'settings:view')) headerActions += `<button id="settings-btn" class="btn btn-icon" title="${t.settings.title}">${t.dashboard.settings}</button>`;
         if (can(effectiveUser, 'data:export')) {
-            headerActions += `<button id="export-btn" class="btn btn-icon" title="ייצוא נתונים">⤓</button>`;
-            headerActions += `<button id="import-btn" class="btn btn-icon" title="ייבוא נתונים">⤒</button>`;
+            headerActions += `<button id="export-btn" class="btn btn-icon" title="${t.dashboard.exportTitle}">${t.dashboard.exportData}</button>`;
+            headerActions += `<button id="import-btn" class="btn btn-icon" title="${t.dashboard.importTitle}">${t.dashboard.importData}</button>`;
         }
     }
-    if (can(effectiveUser, 'feedback:send')) headerActions += `<button id="feedback-btn" class="btn btn-small" title="שלח משוב">💡 משוב</button>`;
-    headerActions += `<button id="logout-btn" class="btn btn-icon" title="התנתק">🚪</button>`;
+    if (can(effectiveUser, 'feedback:send')) headerActions += `<button id="feedback-btn" class="btn btn-small" title="${t.feedback.title}">${t.dashboard.feedback}</button>`;
+    headerActions += `<button id="logout-btn" class="btn btn-icon" title="${t.setup.logout}">${t.dashboard.logout}</button>`;
 
     const members = store.get('members') || [];
 
@@ -164,28 +173,28 @@ function renderShell() {
             <div class="kid-tab-area">
                 <div class="kid-identity-card${kidTabActive}" id="kid-tab-identity" data-kid="${esc(user.kidName)}">
                     <div class="kid-id-graphics">
-                        <div class="kid-id-jar" id="kid-jar-display" title="ערוך חסכון">
+                        <div class="kid-id-jar" id="kid-jar-display" title="${t.kidView.editJarTitle}">
                             <div class="coin-jar-deco">
                                 ${jarSvg}
                                 <span class="drop-coin c1">🪙</span>
                                 <span class="drop-coin c2">🪙</span>
                                 <span class="drop-coin c3">🪙</span>
                             </div>
-                            <button class="kid-id-edit-fab" id="edit-jar-btn" title="ערוך חסכון">✏️</button>
+                            <button class="kid-id-edit-fab" id="edit-jar-btn" title="${t.kidView.editJarTitle}">✏️</button>
                         </div>
-                        <div class="kid-id-avatar" id="kid-header-avatar" title="ערוך אווטאר">
+                        <div class="kid-id-avatar" id="kid-header-avatar" title="${t.kidView.editAvatarTitle}">
                             ${bigAvatar}
-                            <button class="kid-id-edit-fab" id="edit-avatar-fab" title="ערוך אווטאר">✏️</button>
+                            <button class="kid-id-edit-fab" id="edit-avatar-fab" title="${t.kidView.editAvatarTitle}">✏️</button>
                         </div>
                     </div>
-                    <div class="kid-id-name">${esc(user.kidName)} <button class="name-edit-btn" id="edit-name-fab" title="שנה שם">✏️</button></div>
+                    <div class="kid-id-name">${esc(user.kidName)} <button class="name-edit-btn" id="edit-name-fab" title="${t.kidView.editNameTitle}">✏️</button></div>
                 </div>
             </div>`;
 
         // Family tab on the far side — only if kid has siblings
         if (kids.length > 1) {
             const familyActive = _activeTab === '__family__' ? ' active' : '';
-            tabsHtml += `<button class="tab-btn tab-btn-family${familyActive}" data-kid="__family__">🏠 משפחה</button>`;
+            tabsHtml += `<button class="tab-btn tab-btn-family${familyActive}" data-kid="__family__">🏠 ${t.dashboard.familyTab}</button>`;
         }
     } else {
         headerHtml = `
@@ -205,7 +214,7 @@ function renderShell() {
         });
         if (visibleKids.length > 1) {
             const active = _activeTab === '__family__' ? ' active' : '';
-            tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">משפחה</button>`;
+            tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">${t.dashboard.familyTab}</button>`;
         }
     }
 
@@ -213,13 +222,13 @@ function renderShell() {
         ${headerHtml}
         <nav class="tabs-nav${isKidMode ? ' kid-mode-tabs' : ''}" id="dashboard-tabs">${tabsHtml}</nav>
         <div class="dashboard-layout">
-            <aside class="chat-panel-container" id="chat-panel-container"></aside>
+            ${!family.chatDisabled ? '<aside class="chat-panel-container" id="chat-panel-container"></aside>' : ''}
             <div class="dashboard-main">
                 ${visibleKids.length === 0 && user.role === 'manager' ? `
                     <div class="empty-app-state">
-                        <h2>ברוכים הבאים!</h2>
-                        <p>התחל בהוספת חבר משפחה כדי לעקוב אחרי ההשקעות</p>
-                        <button id="empty-add-member-btn" class="btn btn-primary btn-large">+ הוסף חבר משפחה</button>
+                        <h2>${t.dashboard.welcome}</h2>
+                        <p>${t.dashboard.welcomeDesc}</p>
+                        <button id="empty-add-member-btn" class="btn btn-primary btn-large">${t.dashboard.addMemberBtn}</button>
                     </div>
                 ` : ''}
                 <main id="view-container"></main>
@@ -411,7 +420,7 @@ function updatePriceStatus() {
     const lastUpdate = store.get('priceLastUpdate');
     if (el && lastUpdate) {
         const d = new Date(lastUpdate);
-        el.textContent = 'מחירים: ' + d.toLocaleTimeString('he-IL');
+        el.textContent = t.common.priceStatus(d.toLocaleTimeString('he-IL'));
     }
 }
 

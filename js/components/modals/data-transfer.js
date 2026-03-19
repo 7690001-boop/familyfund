@@ -6,6 +6,7 @@ import * as store from '../../store.js';
 import { emit } from '../../event-bus.js';
 import * as investmentService from '../../services/investment-service.js';
 import * as goalService from '../../services/goal-service.js';
+import t from '../../i18n.js';
 
 export function exportData() {
     const data = {
@@ -23,7 +24,7 @@ export function exportData() {
     a.download = 'investments-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
     URL.revokeObjectURL(url);
-    emit('toast', { message: 'נתונים יוצאו בהצלחה', type: 'success' });
+    emit('toast', { message: t.dataTransfer.exportedToast, type: 'success' });
 }
 
 export function importData(file) {
@@ -48,13 +49,13 @@ export function importData(file) {
                 }
             }
 
-            emit('toast', { message: 'נתונים יובאו בהצלחה', type: 'success' });
+            emit('toast', { message: t.dataTransfer.importedToast, type: 'success' });
         } catch (err) {
-            emit('toast', { message: 'שגיאה בקריאת הקובץ', type: 'error' });
+            emit('toast', { message: t.dataTransfer.fileErrorToast, type: 'error' });
         }
     };
     reader.onerror = () => {
-        emit('toast', { message: 'שגיאה בקריאת הקובץ', type: 'error' });
+        emit('toast', { message: t.dataTransfer.fileErrorToast, type: 'error' });
     };
     reader.readAsText(file);
 }

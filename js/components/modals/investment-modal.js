@@ -8,6 +8,7 @@ import { esc } from '../../utils/dom-helpers.js';
 import { toDateStr, currencySymbol } from '../../utils/format.js';
 import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
+import t from '../../i18n.js';
 
 // Modal-scoped state (reset on every open)
 let _historicalData = null;
@@ -19,7 +20,7 @@ let _manualPriceMode = false;   // true when user selected the "ידני" price 
 
 export function showInvestmentModal(kid, existing) {
     const isEdit = !!existing;
-    const title = isEdit ? 'עריכת השקעה' : 'הוספת השקעה';
+    const title = isEdit ? t.investment.titleEdit : t.investment.titleAdd;
     const inv = existing || {};
     const family = store.get('family') || {};
     const sym = family.currency_symbol || '₪';
@@ -34,82 +35,89 @@ export function showInvestmentModal(kid, existing) {
     const html = `
         <h2>${title}</h2>
         <div class="form-group ticker-autocomplete-wrap">
-            <label for="inv-ticker">טיקר</label>
+            <label for="inv-ticker">${t.investment.tickerLabel}</label>
             <div class="ticker-input-row">
-                <input type="text" id="inv-ticker" dir="ltr" placeholder="למשל: VOO" autocomplete="off" value="${esc(inv.ticker || '')}">
-                <button type="button" id="ticker-search-btn">חפש</button>
+                <input type="text" id="inv-ticker" dir="ltr" placeholder="${t.investment.tickerPlaceholder}" autocomplete="off" value="${esc(inv.ticker || '')}">
+                <button type="button" id="ticker-search-btn">${t.investment.searchBtn}</button>
             </div>
             <div id="ticker-results" class="ticker-results" hidden></div>
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="inv-asset">שם הנכס</label>
-                <input type="text" id="inv-asset" placeholder="ימולא אוטומטית מהטיקר" value="${esc(inv.asset_name || '')}">
+                <label for="inv-asset">${t.investment.assetLabel}</label>
+                <input type="text" id="inv-asset" placeholder="${t.investment.assetPlaceholder}" value="${esc(inv.asset_name || '')}">
             </div>
             <div class="form-group">
-                <label for="inv-nickname">כינוי (אופציונלי)</label>
-                <input type="text" id="inv-nickname" placeholder="למשל: קרן S&amp;P" value="${esc(inv.nickname || '')}">
+                <label for="inv-nickname">${t.investment.nicknameLabel}</label>
+                <input type="text" id="inv-nickname" placeholder="${t.investment.nicknamePlaceholder}" value="${esc(inv.nickname || '')}">
             </div>
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="inv-date">תאריך רכישה</label>
+                <label for="inv-date">${t.investment.dateLabel}</label>
                 <input type="date" id="inv-date" value="${toDateStr(inv.purchase_date)}">
             </div>
             <div class="form-group">
-                <label for="inv-shares">יחידות</label>
+                <label for="inv-shares">${t.investment.sharesLabel}</label>
                 <input type="number" id="inv-shares" step="any" min="0" value="${inv.shares || ''}">
             </div>
         </div>
         <div id="purchase-price-section" class="form-group" hidden>
-            <label>מחיר רכישה ליחידה</label>
+            <label>${t.investment.purchasePriceLabel}</label>
             <div class="price-date-nav" id="price-date-nav" hidden>
-                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-prev" title="יום קודם">◀</button>
+                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-prev" title="${t.investment.priceDatePrev}">◀</button>
                 <span class="price-date-label" id="price-date-label"></span>
-                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-next" title="יום הבא">▶</button>
+                <button type="button" class="btn btn-ghost btn-sm price-nav-btn" id="price-date-next" title="${t.investment.priceDateNext}">▶</button>
             </div>
             <div class="price-type-bar" id="price-type-bar">
-                <button type="button" class="price-type-btn active" data-type="close">סגירה</button>
-                <button type="button" class="price-type-btn" data-type="open">פתיחה</button>
-                <button type="button" class="price-type-btn" data-type="high">גבוה</button>
-                <button type="button" class="price-type-btn" data-type="low">נמוך</button>
-                <button type="button" class="price-type-btn" data-type="average">ממוצע</button>
-                <button type="button" class="price-type-btn" data-type="manual">ידני</button>
+                <button type="button" class="price-type-btn active" data-type="close">${t.investment.priceClose}</button>
+                <button type="button" class="price-type-btn" data-type="open">${t.investment.priceOpen}</button>
+                <button type="button" class="price-type-btn" data-type="high">${t.investment.priceHigh}</button>
+                <button type="button" class="price-type-btn" data-type="low">${t.investment.priceLow}</button>
+                <button type="button" class="price-type-btn" data-type="average">${t.investment.priceAverage}</button>
+                <button type="button" class="price-type-btn" data-type="manual">${t.investment.priceManual}</button>
             </div>
             <div id="manual-price-input-wrap" class="manual-price-input-wrap" hidden>
-                <input type="number" id="manual-price-input" class="manual-price-input" step="any" min="0" placeholder="הכנס מחיר ידני">
+                <input type="number" id="manual-price-input" class="manual-price-input" step="any" min="0" placeholder="${t.investment.manualPricePlaceholder}">
             </div>
             <div id="purchase-price-display" class="purchase-price-display"></div>
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="inv-amount">סכום שהושקע (${sym})</label>
+                <label for="inv-amount">${t.investment.amountLabel(sym)}</label>
                 <input type="number" id="inv-amount" step="any" min="0" value="${inv.amount_invested || ''}">
             </div>
             <div class="form-group">
-                <label for="inv-price">מחיר נוכחי ליחידה</label>
+                <label for="inv-price">${t.investment.currentPriceLabel}</label>
                 <input type="number" id="inv-price" step="any" min="0" value="${inv.current_price != null ? inv.current_price : ''}">
-                <div class="form-hint">השאר ריק אם לא ידוע</div>
+                <div class="form-hint">${t.investment.currentPriceHint}</div>
             </div>
         </div>
         <div id="fx-section" class="fx-section" hidden>
             <div class="fx-section-inner">
                 <div class="fx-row">
-                    <span class="fx-label">שער בתאריך הרכישה (<span id="fx-pair-label">USD/ILS</span>):</span>
-                    <input type="number" id="inv-exchange-rate" class="fx-rate-input" step="any" min="0" placeholder="טוען...">
-                    <button type="button" id="fx-refresh-btn" class="btn btn-ghost btn-sm" title="רענן שער נוכחי">↻</button>
+                    <span class="fx-label">${t.investment.fxRateLabel('<span id="fx-pair-label">USD/ILS</span>')}</span>
+                    <input type="number" id="inv-exchange-rate" class="fx-rate-input" step="any" min="0" placeholder="${t.investment.fxRatePlaceholder}">
+                    <button type="button" id="fx-refresh-btn" class="btn btn-ghost btn-sm" title="${t.investment.fxRefreshTitle}">↻</button>
                 </div>
                 <div class="fx-row">
-                    <span class="fx-label">שער נוכחי:</span>
+                    <span class="fx-label">${t.investment.fxCurrentRateLabel}</span>
                     <span id="fx-current-rate-display" class="fx-current-rate">—</span>
                 </div>
                 <div class="fx-equiv" id="fx-equiv-display"></div>
             </div>
         </div>
+        <div class="form-group settings-toggle-row">
+            <label class="settings-toggle-label">
+                <input type="checkbox" id="inv-hidden" ${inv.hidden ? 'checked' : ''}>
+                <span>${t.investment.hiddenLabel}</span>
+            </label>
+            <div class="form-hint">${t.investment.hiddenHint}</div>
+        </div>
         <div class="modal-actions">
-            ${isEdit ? '<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">מחק</button>' : ''}
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-primary" id="modal-save">שמור</button>
+            ${isEdit ? `<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">${t.common.delete}</button>` : ''}
+            <button class="btn btn-secondary" id="modal-cancel">${t.common.cancel}</button>
+            <button class="btn btn-primary" id="modal-save">${t.common.save}</button>
         </div>
     `;
 
@@ -174,6 +182,7 @@ export function showInvestmentModal(kid, existing) {
             current_price: currentPrice ? parseFloat(currentPrice) : null,
             currency,
             exchange_rate_at_purchase: exchangeRate || _exchangeRateAtPurchase || null,
+            hidden: modal.querySelector('#inv-hidden').checked,
         };
 
         try {
@@ -185,9 +194,9 @@ export function showInvestmentModal(kid, existing) {
                 await add(user.familyId, record);
             }
             closeModal();
-            emit('toast', { message: isEdit ? 'השקעה עודכנה' : 'השקעה נוספה', type: 'success' });
+            emit('toast', { message: isEdit ? t.investment.updatedToast : t.investment.addedToast, type: 'success' });
         } catch (e) {
-            emit('toast', { message: 'שגיאה בשמירת השקעה', type: 'error' });
+            emit('toast', { message: t.investment.saveErrorToast, type: 'error' });
         }
     });
 
@@ -214,9 +223,9 @@ export async function deleteInvestment(id) {
         const user = store.get('user');
         const { remove } = await import('../../services/investment-service.js');
         await remove(user.familyId, id);
-        emit('toast', { message: 'השקעה נמחקה', type: 'success' });
+        emit('toast', { message: t.investment.deletedToast, type: 'success' });
     } catch (e) {
-        emit('toast', { message: 'שגיאה במחיקת השקעה', type: 'error' });
+        emit('toast', { message: t.investment.deleteErrorToast, type: 'error' });
     }
 }
 
@@ -238,7 +247,7 @@ function getHistoricTickers() {
 function renderResults(modal, resultsEl, items, activeIndex) {
     resultsEl.innerHTML = items.map((r, i) => `
         <div class="ticker-result-item${r.historic ? ' ticker-result-historic' : ''}" data-index="${i}" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}">
-            ${r.historic ? '<span class="ticker-historic-badge">היסטוריה</span>' : ''}
+            ${r.historic ? `<span class="ticker-historic-badge">${t.investment.historyBadge}</span>` : ''}
             <span class="ticker-symbol">${esc(r.symbol)}</span>
             <span class="ticker-name">${esc(r.name)}</span>
             ${r.exchange ? `<span class="ticker-exchange">${esc(r.exchange)}</span>` : ''}
@@ -533,7 +542,7 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
         return;
     }
 
-    display.innerHTML = '<span class="price-loading">טוען מחיר...</span>';
+    display.innerHTML = `<span class="price-loading">${t.investment.loadingPrice}</span>`;
     _historicalData = null;
     dateNavRow.hidden = true;
 
@@ -567,7 +576,7 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
         const type = activeBtn?.dataset.type || 'close';
         if (type !== 'manual') updatePurchasePriceDisplay(modal, data[type], type);
     } catch {
-        display.innerHTML = '<span class="price-error">לא נמצא מחיר לתאריך זה</span>';
+        display.innerHTML = `<span class="price-error">${t.investment.noDatePrice}</span>`;
         if (dateLabelEl) dateLabelEl.textContent = effectiveDateStr;
         dateNavRow.hidden = false;
     }
@@ -575,15 +584,15 @@ async function triggerPurchasePriceLookup(modal, options = {}) {
 
 function updatePurchasePriceDisplay(modal, price, type) {
     const display = modal.querySelector('#purchase-price-display');
-    const labels = { open: 'פתיחה', close: 'סגירה', high: 'גבוה', low: 'נמוך', average: 'ממוצע' };
+    const labels = t.investment.priceLabels;
     const currency = _tickerCurrency || 'ILS';
     const sym = currencySymbol(currency);
 
     if (price != null) {
         display.innerHTML = `
             <span class="price-value" dir="ltr">${sym}${price}</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">חשב יחידות</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">חשב סכום</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">${t.investment.calcUnitsBtn}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">${t.investment.calcAmountBtn}</button>
         `;
 
         display.querySelector('#use-purchase-price').addEventListener('click', () => {
@@ -609,7 +618,7 @@ function updatePurchasePriceDisplay(modal, price, type) {
         const label = labels[type] || type;
         const span = document.createElement('span');
         span.className = 'price-error';
-        span.textContent = 'אין נתון ל' + label;
+        span.textContent = t.investment.noPriceForDate(label);
         display.innerHTML = '';
         display.appendChild(span);
     }
@@ -620,8 +629,8 @@ function showManualPriceControls(modal) {
     const currency = _tickerCurrency || 'ILS';
 
     display.innerHTML = `
-        <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">חשב יחידות</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">חשב סכום</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="use-purchase-price">${t.investment.calcUnitsBtn}</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="calc-amount-from-shares">${t.investment.calcAmountBtn}</button>
     `;
 
     const getPrice = () => parseFloat(modal.querySelector('#manual-price-input')?.value) || 0;

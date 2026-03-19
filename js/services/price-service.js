@@ -6,6 +6,7 @@ import { FIREBASE_CDN, YAHOO_CHART_URL, YAHOO_SEARCH_URL, GLOBES_PRICE_URL, GLOB
 import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
+import t from '../i18n.js';
 
 const PRICE_REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 let priceTimer = null;
@@ -139,11 +140,11 @@ async function _fetchPricesInner(silent) {
     )];
 
     if (tickers.length === 0) {
-        if (!silent) emit('toast', { message: 'אין טיקרים מוגדרים להשקעות', type: 'error' });
+        if (!silent) emit('toast', { message: t.errors.noPriceTickers, type: 'error' });
         return;
     }
 
-    if (!silent) emit('toast', { message: 'מעדכן מחירים מ-Yahoo Finance...' });
+    if (!silent) emit('toast', { message: t.prices.fetchingToast });
 
     const prices = new Map();
     const currencies = new Map();
@@ -191,8 +192,8 @@ async function _fetchPricesInner(silent) {
         const updated = prices.size;
         emit('toast', {
             message: updated > 0
-                ? 'עודכנו ' + updated + ' מחירים' + (errors > 0 ? ' (' + errors + ' נכשלו)' : '')
-                : 'לא עודכנו מחירים' + (errors > 0 ? ' — בדוק את הטיקרים' : ''),
+                ? t.prices.updatedToast(updated, errors)
+                : t.prices.noneUpdatedToast(errors),
             type: updated > 0 ? 'success' : 'error',
         });
     }

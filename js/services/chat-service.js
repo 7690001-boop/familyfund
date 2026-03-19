@@ -208,7 +208,15 @@ export async function deleteMessage(familyId, topicId, messageId) {
 }
 
 export async function deleteTopic(familyId, topicId) {
-    const { doc, deleteDoc } = await fs();
+    const { collection, doc, deleteDoc, getDocs } = await fs();
     const db = getAppDb();
+    const msgs = await getDocs(collection(db, 'families', familyId, 'chatTopics', topicId, 'messages'));
+    await Promise.all(msgs.docs.map(d => deleteDoc(d.ref)));
     await deleteDoc(doc(db, 'families', familyId, 'chatTopics', topicId));
+}
+
+export async function lockTopic(familyId, topicId, locked) {
+    const { doc, updateDoc } = await fs();
+    const db = getAppDb();
+    await updateDoc(doc(db, 'families', familyId, 'chatTopics', topicId), { locked });
 }

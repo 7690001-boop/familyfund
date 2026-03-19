@@ -3,11 +3,12 @@
 // Supports email login (manager) and username login (members)
 // ============================================================
 
-import { FIREBASE_CDN, WORKER_LOGIN_URL } from '../config.js';
+import { FIREBASE_CDN, WORKER_LOGIN_URL, WORKER_MEMBER_LOGIN_URL } from '../config.js';
 import { getAppAuth, getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
 import { clearImpersonation } from './impersonate.js';
+import t from '../i18n.js';
 
 let unsubAuth = null;
 
@@ -74,7 +75,7 @@ async function loadUserProfile(firebaseUser) {
         }
     } catch (e) {
         console.error('Failed to load user profile:', e);
-        emit('toast', { message: 'שגיאה בטעינת פרופיל משתמש', type: 'error' });
+        emit('toast', { message: t.errors.loadProfileError, type: 'error' });
     }
 }
 
@@ -91,7 +92,7 @@ export async function login(email, password) {
         const data = await res.json().catch(() => ({}));
         const retryAfter = data.retryAfter ?? 60;
         const minutes = Math.ceil(retryAfter / 60);
-        const err = new Error(`יותר מדי נסיונות התחברות. נסה שוב בעוד ${minutes} דקות.`);
+        const err = new Error(t.errors.tooManyAttemptsMin(minutes));
         err.code = 'auth/too-many-requests';
         err.retryAfter = retryAfter;
         throw err;
@@ -110,28 +111,39 @@ export async function login(email, password) {
     return signInWithCustomToken(auth, customToken);
 }
 
-// Member login — with username (converted to synthetic email internally)
-export async function loginWithUsername(username, password, familyId) {
-    const syntheticEmail = usernameToEmail(username, familyId);
-    return login(syntheticEmail, password);
-}
+// Member login — server-side username lookup via worker (no client-side Firestore reads)
+export async function loginWithUsername(username, password) {
+    const res = await fetch(WORKER_MEMBER_LOGIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+    });
 
-// Check if a family exists by its ID (used during kid login to validate family code)
-export async function lookupFamilyId(familyCode) {
-    const { doc, getDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
-    const db = getAppDb();
-    const famDoc = await getDoc(doc(db, 'families', familyCode));
-    if (famDoc.exists()) return familyCode;
-    return null;
-}
+    if (res.status === 429) {
+        const data = await res.json().catch(() => ({}));
+        const retryAfter = data.retryAfter ?? 60;
+        const minutes = Math.ceil(retryAfter / 60);
+        const err = new Error(t.errors.tooManyAttemptsMin(minutes));
+        err.code = 'auth/too-many-requests';
+        err.retryAfter = retryAfter;
+        throw err;
+    }
 
-// Look up a member's familyId by their username (no auth required — uses public usernames collection)
-export async function lookupFamilyIdByUsername(username) {
-    const { doc, getDoc } = await import(`${FIREBASE_CDN}/firebase-firestore.js`);
-    const db = getAppDb();
-    const snap = await getDoc(doc(db, 'usernames', username.toLowerCase()));
-    if (snap.exists()) return snap.data().familyId;
-    return null;
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const err = new Error(data.error || 'Invalid credentials');
+        if (data.error === 'USERNAME_NOT_FOUND') {
+            err.code = 'auth/user-not-found';
+        } else {
+            err.code = 'auth/invalid-credential';
+        }
+        throw err;
+    }
+
+    const { customToken } = await res.json();
+    const { signInWithCustomToken } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const auth = getAppAuth();
+    return signInWithCustomToken(auth, customToken);
 }
 
 export async function signup(email, password) {
@@ -166,6 +178,20 @@ export async function changePassword(newPassword) {
     const auth = getAppAuth();
     if (!auth.currentUser) throw new Error('No authenticated user');
     await updatePassword(auth.currentUser, newPassword);
+}
+
+// Change password with current-password verification (reauthenticates first).
+// Safe for both manager and member accounts — uses the stored email on currentUser.
+export async function changePasswordWithVerification(currentPassword, newPassword) {
+    const { reauthenticateWithCredential, updatePassword, EmailAuthProvider } =
+        await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const auth = getAppAuth();
+    const user = auth.currentUser;
+    if (!user) throw new Error('No authenticated user');
+
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
 }
 
 export function destroy() {

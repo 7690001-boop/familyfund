@@ -3,6 +3,8 @@
 // Stored as JSON on member docs, rendered as inline SVG
 // ============================================================
 
+import t from '../../i18n.js';
+
 // Default avatar config
 export const DEFAULT_AVATAR = {
     skin: '#F8D5B4',
@@ -669,48 +671,12 @@ export const HAIR_OPTIONS = ['short', 'pixie', 'buzz', 'spiky', 'mohawk', 'curly
 export const ACCESSORY_OPTIONS = ['hat', 'crown', 'bow', 'headband', 'flower', 'star', 'cap', 'beanie', 'earrings', 'bandana', 'tiara', 'butterfly', 'hearts'];
 export const GLASSES_OPTIONS = ['none', 'round', 'square', 'cat-eye'];
 
-// Labels (Hebrew)
-export const LABELS = {
-    skin: 'צבע עור',
-    faceShape: 'צורת פנים',
-    hair: 'תסרוקת',
-    hairColor: 'צבע שיער',
-    eyes: 'עיניים',
-    eyeColor: 'צבע עיניים',
-    eyebrows: 'גבות',
-    mouth: 'פה',
-    accessories: 'אביזרים',
-    glasses: 'משקפיים',
-    freckles: 'נמשים',
-    bgColor: 'רקע',
-};
-
-export const FACE_SHAPE_LABELS = {
-    round: 'עגול', oval: 'אובלי', square: 'מרובע', heart: 'לב',
-};
-export const EYES_LABELS = {
-    happy: 'שמח', round: 'עגול', wink: 'קריצה', cool: 'מגניב', big: 'גדול', sleepy: 'ישנוני',
-    heart: 'לבבות', stars: 'כוכבים', lashes: 'ריסים', dizzy: 'מסוחרר',
-};
-export const EYEBROW_LABELS = {
-    normal: 'רגיל', raised: 'מורם', angry: 'כועס', thick: 'עבה', worried: 'מודאג', none: 'ללא',
-};
-export const MOUTH_LABELS = {
-    smile: 'חיוך', grin: 'חייכן', tongue: 'לשון', neutral: 'ניטרלי', surprised: 'מופתע', cat: 'חתול',
-    kiss: 'נשיקה', teeth: 'שיניים', smirk: 'חצי חיוך', fangs: 'ניבים',
-};
-export const HAIR_LABELS = {
-    short: 'קצר', pixie: 'פיקסי', buzz: 'מגולח', spiky: 'סוער', mohawk: 'מוהיקן',
-    curly: 'מתולתל', wavy: 'גלי', lob: 'בוב', long: 'ארוך',
-    sidepart: 'חלוקה', curtain: 'פוני', bun: 'גולגול', 'twin-buns': 'שתי קוקויות',
-    ponytail: 'קוקו', pigtails: 'שתי צמות', 'side-braid': 'צמה צדדית',
-    braids: 'צמות קלועות', afro: 'אפרו', none: 'ללא',
-};
-export const ACCESSORY_LABELS = {
-    hat: 'כובע', crown: 'כתר', bow: 'פפיון', headband: 'סרט', flower: 'פרח', star: 'כוכב',
-    cap: 'מצחיה', beanie: 'כיפה', earrings: 'עגילים', bandana: 'בנדנה',
-    tiara: 'נזר', butterfly: 'פרפר', hearts: 'לבבות',
-};
-export const GLASSES_LABELS = {
-    none: 'ללא', round: 'עגול', square: 'מרובע', 'cat-eye': 'חתולי',
-};
+// Labels (from i18n)
+export const LABELS = t.avatar.labels;
+export const FACE_SHAPE_LABELS = t.avatar.faceShapes;
+export const EYES_LABELS = t.avatar.eyes;
+export const EYEBROW_LABELS = t.avatar.eyebrows;
+export const MOUTH_LABELS = t.avatar.mouths;
+export const HAIR_LABELS = t.avatar.hair;
+export const ACCESSORY_LABELS = t.avatar.accessories;
+export const GLASSES_LABELS = t.avatar.glasses;

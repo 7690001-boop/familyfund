@@ -86,8 +86,10 @@ export function calcInvestment(inv) {
     };
 }
 
-export function kidInvestments(investments, kid) {
-    return investments.filter(inv => inv.kid === kid).map(calcInvestment);
+export function kidInvestments(investments, kid, showHidden = true) {
+    return investments
+        .filter(inv => inv.kid === kid && (showHidden || !inv.hidden))
+        .map(calcInvestment);
 }
 
 export function kidGoals(goals, kid) {
@@ -152,6 +154,7 @@ export function aggregateByTicker(investments) {
             kid: first.kid,
             currency,
             purchaseCount: group.length,
+            someHidden: group.some(inv => !!inv.hidden),
             totalShares,
             totalInvested,
             totalInvestedNative,

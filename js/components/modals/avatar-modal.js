@@ -15,6 +15,7 @@ import {
     FACE_SHAPE_LABELS, EYES_LABELS, EYEBROW_LABELS, MOUTH_LABELS,
     HAIR_LABELS, ACCESSORY_LABELS, GLASSES_LABELS,
 } from '../ui/avatar.js';
+import t from '../../i18n.js';
 
 export function showAvatarModal(kidName, currentAvatar) {
     const cfg = { ...DEFAULT_AVATAR, ...(currentAvatar || {}) };
@@ -32,9 +33,9 @@ export function showAvatarModal(kidName, currentAvatar) {
     function updateStatus(status) {
         const el = document.getElementById('avatar-save-status');
         if (!el) return;
-        if (status === 'saving') { el.textContent = 'שומר...'; el.className = 'avatar-save-status saving'; }
-        else if (status === 'saved') { el.textContent = '✓ נשמר'; el.className = 'avatar-save-status saved'; }
-        else if (status === 'error') { el.textContent = '⚠ שגיאה'; el.className = 'avatar-save-status error'; }
+        if (status === 'saving') { el.textContent = t.common.saving; el.className = 'avatar-save-status saving'; }
+        else if (status === 'saved') { el.textContent = t.common.saved; el.className = 'avatar-save-status saved'; }
+        else if (status === 'error') { el.textContent = t.common.error; el.className = 'avatar-save-status error'; }
         else { el.textContent = ''; el.className = 'avatar-save-status'; }
     }
 
@@ -56,7 +57,7 @@ export function showAvatarModal(kidName, currentAvatar) {
                 console.error('Failed to save avatar:', e);
                 if (gen === saveGeneration) {
                     updateStatus('error');
-                    emit('toast', { message: 'שגיאה בשמירת האווטאר', type: 'error' });
+                    emit('toast', { message: t.errors.saveAvatarError, type: 'error' });
                 }
             }
         }, 400);
@@ -94,12 +95,12 @@ export function showAvatarModal(kidName, currentAvatar) {
     function togglePicker(id, label, current) {
         return `<div class="avatar-option-row" id="${id}">
             <button class="avatar-option-btn${current ? ' active' : ''}" data-value="true">${label}</button>
-            <button class="avatar-option-btn${!current ? ' active' : ''}" data-value="false">ללא</button>
+            <button class="avatar-option-btn${!current ? ' active' : ''}" data-value="false">${t.avatar.frecklesOff}</button>
         </div>`;
     }
 
     const html = `
-        <h2>עריכת אווטאר</h2>
+        <h2>${t.avatar.title}</h2>
         <div class="avatar-editor">
             <div class="avatar-preview-area">
                 <div id="avatar-preview">${renderAvatar(draft, 120)}</div>
@@ -140,7 +141,7 @@ export function showAvatarModal(kidName, currentAvatar) {
                 </div>
                 <div class="avatar-section">
                     <label>${LABELS.freckles}</label>
-                    ${togglePicker('pick-freckles', 'נמשים', draft.freckles)}
+                    ${togglePicker('pick-freckles', t.avatar.frecklesOn, draft.freckles)}
                 </div>
                 <div class="avatar-section">
                     <label>${LABELS.hair}</label>
@@ -151,15 +152,15 @@ export function showAvatarModal(kidName, currentAvatar) {
                     ${colorPicker('pick-hair-color', HAIR_COLORS, draft.hairColor)}
                 </div>
                 <div class="avatar-section">
-                    <label>${LABELS.accessories} <span class="avatar-hint">(ניתן לבחור כמה)</span></label>
+                    <label>${LABELS.accessories} <span class="avatar-hint">${t.avatar.multiHint}</span></label>
                     ${multiOptionPicker('pick-accessories', ACCESSORY_OPTIONS, ACCESSORY_LABELS, draft.accessories)}
                 </div>
-                <button class="btn btn-ghost avatar-randomize" id="avatar-randomize" type="button">🎲 אקראי</button>
+                <button class="btn btn-ghost avatar-randomize" id="avatar-randomize" type="button">${t.avatar.randomize}</button>
             </div>
         </div>
         <div class="modal-actions">
             <span class="avatar-save-status" id="avatar-save-status"></span>
-            <button class="btn btn-secondary" id="modal-cancel">בטל שינויים</button>
+            <button class="btn btn-secondary" id="modal-cancel">${t.avatar.cancel}</button>
         </div>
     `;
 

@@ -4,30 +4,31 @@
 
 import { open as openModal, close as closeModal } from '../ui/modal.js';
 import { emit } from '../../event-bus.js';
+import t from '../../i18n.js';
 
 export function showFeedbackModal() {
     const html = `
-        <h2>שלח משוב</h2>
+        <h2>${t.feedback.title}</h2>
         <p style="color:var(--color-text-muted);font-size:0.85rem;margin-bottom:1rem">
-            יש לך רעיון, באג, או הצעה לשיפור? נשמח לשמוע!
+            ${t.feedback.subtitle}
         </p>
         <div class="form-group">
-            <label for="feedback-type">סוג</label>
+            <label for="feedback-type">${t.feedback.typeLabel}</label>
             <select id="feedback-type" class="form-input">
-                <option value="idea">💡 רעיון</option>
-                <option value="bug">🐛 באג</option>
-                <option value="improvement">✨ שיפור</option>
-                <option value="other">💬 אחר</option>
+                <option value="idea">${t.feedback.typeIdea}</option>
+                <option value="bug">${t.feedback.typeBug}</option>
+                <option value="improvement">${t.feedback.typeImprovement}</option>
+                <option value="other">${t.feedback.typeOther}</option>
             </select>
         </div>
         <div class="form-group">
-            <label for="feedback-text">הודעה</label>
-            <textarea id="feedback-text" class="form-input" rows="4" placeholder="ספר/י לנו מה חשבת..."></textarea>
+            <label for="feedback-text">${t.feedback.messageLabel}</label>
+            <textarea id="feedback-text" class="form-input" rows="4" placeholder="${t.feedback.messagePlaceholder}"></textarea>
         </div>
         <div id="feedback-error" class="auth-error" hidden></div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" id="feedback-cancel">ביטול</button>
-            <button class="btn btn-primary" id="feedback-send">שלח</button>
+            <button class="btn btn-secondary" id="feedback-cancel">${t.feedback.cancelBtn}</button>
+            <button class="btn btn-primary" id="feedback-send">${t.feedback.sendBtn}</button>
         </div>
     `;
 
@@ -48,19 +49,19 @@ export function showFeedbackModal() {
         }
 
         btn.disabled = true;
-        btn.textContent = 'שולח...';
+        btn.textContent = t.common.sending;
 
         try {
             const { sendFeedback } = await import('../../services/feedback-service.js');
             await sendFeedback({ text, type });
             closeModal();
-            emit('toast', { message: 'המשוב נשלח בהצלחה! תודה 🙏', type: 'success' });
+            emit('toast', { message: t.feedback.successToast, type: 'success' });
         } catch (e) {
             console.error('Failed to send feedback:', e);
-            errorEl.textContent = 'שגיאה בשליחת המשוב. נסה שוב.';
+            errorEl.textContent = t.errors.saveFeedbackError;
             errorEl.hidden = false;
             btn.disabled = false;
-            btn.textContent = 'שלח';
+            btn.textContent = t.feedback.sendBtn;
         }
     });
 }

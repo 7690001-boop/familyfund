@@ -8,6 +8,7 @@
 import * as store from '../../store.js';
 import { esc } from '../../utils/dom-helpers.js';
 import { renderAvatar, DEFAULT_AVATAR } from './avatar.js';
+import t from '../../i18n.js';
 
 let chatService = null;  // lazy-loaded
 
@@ -76,9 +77,7 @@ export function mount(container) {
     render();
 
     _unsubs.push(
-        store.subscribe('chatTopics', () => {
-            if (!_currentTopicId) render();
-        }),
+        store.subscribe('chatTopics', () => render()),
         store.subscribe('chatMessages', () => renderMessagesUpdate()),
         store.subscribe('members', () => { if (_currentTopicId) renderMessagesUpdate(); }),
     );
@@ -158,10 +157,10 @@ function render() {
     _container.innerHTML = `
         <div class="chat-panel${_collapsed ? ' collapsed' : ''}">
             <div class="chat-panel-header">
-                <button class="chat-toggle-btn" id="chat-toggle" title="${_collapsed ? 'פתח צ׳אט' : 'סגור צ׳אט'}">
+                <button class="chat-toggle-btn" id="chat-toggle" title="${_collapsed ? t.chat.toggleOpen : t.chat.toggleClose}">
                     <span class="chat-toggle-icon">${_collapsed ? '💬' : '✕'}</span>
                 </button>
-                ${!_collapsed ? '<h3 class="chat-title">צ׳אט משפחתי</h3>' : ''}
+                ${!_collapsed ? `<h3 class="chat-title">${t.chat.title}</h3>` : ''}
             </div>
             ${!_collapsed ? `<div class="chat-body" id="chat-body">${bodyHtml}</div>` : ''}
         </div>
@@ -172,37 +171,55 @@ function render() {
 
 function renderTopicList(topics) {
     const latestAnnouncement = _announcements?.[0];
+    const user = store.get('user');
+    const isManager = user?.role === 'manager';
 
     return `
         <div class="chat-topic-list">
             <div class="chat-topic-item chat-announcements-item" id="announcements-btn">
-                <div class="chat-topic-title chat-announcements-title">מה חדש?</div>
+                <div class="chat-topic-title chat-announcements-title">${t.chat.whatNew}</div>
                 ${latestAnnouncement ? `<div class="chat-topic-preview">${esc(latestAnnouncement.title)} (${esc(latestAnnouncement.version)})</div>` : ''}
             </div>
             ${_creatingTopic ? `
                 <div class="chat-new-topic-form">
                     <input type="text" class="chat-new-topic-input" id="new-topic-input"
-                           placeholder="שם הנושא..." dir="rtl" autocomplete="off" maxlength="60">
+                           placeholder="${t.chat.newTopicInput}" dir="rtl" autocomplete="off" maxlength="60">
                     <div class="chat-new-topic-actions">
-                        <button class="chat-new-topic-submit" id="new-topic-submit">יצירה</button>
-                        <button class="chat-new-topic-cancel" id="new-topic-cancel">ביטול</button>
+                        <button class="chat-new-topic-submit" id="new-topic-submit">${t.chat.newTopicSubmit}</button>
+                        <button class="chat-new-topic-cancel" id="new-topic-cancel">${t.chat.newTopicCancel}</button>
                     </div>
                 </div>
             ` : `
-                <button class="chat-new-topic-btn" id="new-topic-btn">+ נושא חדש</button>
+                <button class="chat-new-topic-btn" id="new-topic-btn">${t.chat.newTopicBtn}</button>
             `}
-            ${topics.length === 0 && !_creatingTopic ? '<p class="chat-empty">אין נושאים עדיין. התחילו שיחה!</p>' : ''}
-            ${topics.map((t, i) => {
+            ${topics.length === 0 && !_creatingTopic ? `<p class="chat-empty">${t.chat.emptyTopics}</p>` : ''}
+            ${topics.map((topic, i) => {
                 const c = topicColor(i);
+                const locked = !!topic.locked;
+                const border = locked ? '#b2bec3' : c.border;
+                const bg = locked ? '#f5f5f5' : c.bg;
+                const titleColor = locked ? '#888' : c.border;
                 return `
-                <div class="chat-topic-item" data-topic-id="${esc(t.id)}"
-                     style="border-right: 4px solid ${c.border}; background: ${c.bg};">
-                    <div class="chat-topic-title" style="color: ${c.border};">${esc(t.title)}</div>
-                    <div class="chat-topic-meta">
-                        <span class="chat-topic-author">${esc(t.author_name)}</span>
-                        <span class="chat-topic-time">${formatTime(t.lastMessageAt)}</span>
+                <div class="chat-topic-item${locked ? ' chat-topic-item-locked' : ''}" data-topic-id="${esc(topic.id)}"
+                     style="border-right: 4px solid ${border}; background: ${bg};">
+                    <div class="chat-topic-header-row">
+                        <div class="chat-topic-title" style="color: ${titleColor};">${locked ? '🔒 ' : ''}${esc(topic.title)}</div>
+                        ${isManager ? `
+                            <button class="chat-topic-lock-btn" data-action="lock" data-topic-id="${esc(topic.id)}" data-locked="${locked}"
+                                    title="${locked ? t.chat.unlockTopic : t.chat.lockTopic}">
+                                ${locked ? '🔓' : '🔒'}
+                            </button>
+                            <button class="chat-topic-lock-btn" data-action="delete-topic" data-topic-id="${esc(topic.id)}"
+                                    title="${t.chat.deleteTopic}">
+                                🗑
+                            </button>
+                        ` : ''}
                     </div>
-                    ${t.lastMessage ? `<div class="chat-topic-preview">${esc(t.lastMessageAuthor)}: ${esc(t.lastMessage)}</div>` : ''}
+                    <div class="chat-topic-meta">
+                        <span class="chat-topic-author">${esc(topic.author_name)}</span>
+                        <span class="chat-topic-time">${formatTime(topic.lastMessageAt)}</span>
+                    </div>
+                    ${topic.lastMessage ? `<div class="chat-topic-preview">${esc(topic.lastMessageAuthor)}: ${esc(topic.lastMessage)}</div>` : ''}
                 </div>
             `}).join('')}
         </div>
@@ -216,10 +233,10 @@ function renderAnnouncementsView() {
         <div class="chat-topic-view">
             <div class="chat-topic-header chat-announcements-header">
                 <button class="chat-back-btn" id="chat-back">→</button>
-                <span class="chat-topic-name">מה חדש?</span>
+                <span class="chat-topic-name">${t.chat.whatNew}</span>
             </div>
             <div class="chat-messages chat-announcements-list" id="chat-announcements">
-                ${announcements.length === 0 ? '<p class="chat-empty">אין עדכונים</p>' : ''}
+                ${announcements.length === 0 ? `<p class="chat-empty">${t.chat.emptyAnnouncements}</p>` : ''}
                 ${announcements.map(a => `
                     <div class="chat-announcement">
                         <div class="chat-announcement-badge">${esc(a.version)}</div>
@@ -239,25 +256,29 @@ function renderAnnouncementsView() {
 
 function renderTopicView() {
     const topics = store.get('chatTopics') || [];
-    const topicIdx = topics.findIndex(t => t.id === _currentTopicId);
+    const topicIdx = topics.findIndex(tp => tp.id === _currentTopicId);
     const topic = topicIdx >= 0 ? topics[topicIdx] : null;
     if (!topic) return '';
     const c = topicColor(topicIdx);
+    const locked = !!topic.locked;
 
     return `
         <div class="chat-topic-view">
-            <div class="chat-topic-header" style="border-bottom: 3px solid ${c.border}; background: ${c.bg};">
+            <div class="chat-topic-header" style="border-bottom: 3px solid ${locked ? '#b2bec3' : c.border}; background: ${locked ? '#f5f5f5' : c.bg};">
                 <button class="chat-back-btn" id="chat-back">→</button>
-                <span class="chat-topic-name" style="color: ${c.border};">${esc(topic.title)}</span>
+                <span class="chat-topic-name" style="color: ${locked ? '#888' : c.border};">${locked ? '🔒 ' : ''}${esc(topic.title)}</span>
             </div>
             <div class="chat-messages" id="chat-messages">
                 ${renderLoadMoreIndicator()}
                 ${renderMessagesList()}
             </div>
-            <div class="chat-input-area">
-                <input type="text" class="chat-input" id="chat-input" placeholder="כתבו הודעה..." dir="rtl" autocomplete="off">
-                <button class="chat-send-btn" id="chat-send">←</button>
-            </div>
+            ${locked
+                ? `<div class="chat-locked-notice">${t.chat.lockedNotice}</div>`
+                : `<div class="chat-input-area">
+                    <input type="text" class="chat-input" id="chat-input" placeholder="${t.chat.inputPlaceholder}" dir="rtl" autocomplete="off">
+                    <button class="chat-send-btn" id="chat-send">←</button>
+                </div>`
+            }
         </div>
     `;
 }
@@ -265,7 +286,7 @@ function renderTopicView() {
 function renderLoadMoreIndicator() {
     if (!chatService) return '';
     if (chatService.isLoadingMore()) {
-        return '<div class="chat-load-more">טוען...</div>';
+        return `<div class="chat-load-more">${t.chat.loadingMore}</div>`;
     }
     if (chatService.hasMoreMessages()) {
         return '<div class="chat-load-more" id="chat-load-sentinel"></div>';
@@ -277,7 +298,7 @@ function renderMessagesList() {
     const messages = store.get('chatMessages') || [];
     const user = store.get('user');
     if (messages.length === 0) {
-        return '<p class="chat-empty">אין הודעות עדיין</p>';
+        return `<p class="chat-empty">${t.chat.emptyMessages}</p>`;
     }
 
     const editableIds = getEditableIds(messages, user?.uid);
@@ -288,7 +309,7 @@ function renderMessagesList() {
         const avatar = getAuthorAvatar(m.author_uid);
         const canEdit = isMe && editableIds.has(m.id);
         const isEditing = _editingMessageId === m.id;
-        const editedTag = m.edited_at ? '<span class="chat-msg-edited">נערך</span>' : '';
+        const editedTag = m.edited_at ? `<span class="chat-msg-edited">${t.chat.edited}</span>` : '';
 
         if (isEditing) {
             return `
@@ -298,8 +319,8 @@ function renderMessagesList() {
                         <input type="text" class="chat-edit-input" id="chat-edit-input"
                                value="${esc(m.text)}" dir="rtl" autocomplete="off">
                         <div class="chat-edit-actions">
-                            <button class="chat-edit-save" data-msg-id="${esc(m.id)}">שמור</button>
-                            <button class="chat-edit-cancel">ביטול</button>
+                            <button class="chat-edit-save" data-msg-id="${esc(m.id)}">${t.chat.editSave}</button>
+                            <button class="chat-edit-cancel">${t.chat.editCancel}</button>
                         </div>
                     </div>
                 </div>
@@ -310,14 +331,14 @@ function renderMessagesList() {
             <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}">
                 <div class="chat-msg-avatar">${avatar}</div>
                 <div class="chat-msg-bubble">
-                    <div class="chat-msg-author">${isMe ? 'אני' : esc(displayName)}</div>
+                    <div class="chat-msg-author">${isMe ? t.chat.me : esc(displayName)}</div>
                     <div class="chat-msg-text">${esc(m.text)}</div>
                     <div class="chat-msg-footer">
                         <span class="chat-msg-time">${formatTime(m.created_at)}${editedTag}</span>
                         ${canEdit ? `
                             <span class="chat-msg-actions">
-                                <button class="chat-msg-action-btn chat-msg-edit" data-msg-id="${esc(m.id)}" title="ערוך">✎</button>
-                                <button class="chat-msg-action-btn chat-msg-delete" data-msg-id="${esc(m.id)}" title="מחק">🗑</button>
+                                <button class="chat-msg-action-btn chat-msg-edit" data-msg-id="${esc(m.id)}" title="${t.chat.editTitle}">✎</button>
+                                <button class="chat-msg-action-btn chat-msg-delete" data-msg-id="${esc(m.id)}" title="${t.chat.deleteTitle}">🗑</button>
                             </span>
                         ` : ''}
                     </div>
@@ -362,7 +383,7 @@ function wireScrollLoad(messagesEl) {
         if (!chatService.hasMoreMessages() || chatService.isLoadingMore()) return;
 
         observer.disconnect();
-        sentinel.textContent = 'טוען...';
+        sentinel.textContent = t.chat.loadingMore;
         await chatService.loadMoreMessages();
     }, { root: messagesEl, threshold: 0.1 });
 
@@ -461,7 +482,7 @@ function wireEvents() {
             if (!title) return;
             newTopicSubmit.disabled = true;
             const user = store.get('user');
-            const authorName = user.kidName || user.displayName || 'הורה';
+            const authorName = user.kidName || user.displayName || t.chat.parentFallback;
             const svc = await getChatService();
             await svc.createTopic(user.familyId, title, authorName, user.uid);
             _creatingTopic = false;
@@ -490,6 +511,35 @@ function wireEvents() {
             render();
         });
     }
+
+    // Lock/unlock buttons for managers
+    _container.querySelectorAll('[data-action="lock"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const topicId = btn.dataset.topicId;
+            const locked = btn.dataset.locked === 'true';
+            const user = store.get('user');
+            const svc = await getChatService();
+            await svc.lockTopic(user.familyId, topicId, !locked);
+        });
+    });
+
+    // Delete topic buttons for managers
+    _container.querySelectorAll('[data-action="delete-topic"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(t.chat.deleteTopicConfirm)) return;
+            const topicId = btn.dataset.topicId;
+            const user = store.get('user');
+            const svc = await getChatService();
+            if (_currentTopicId === topicId) {
+                svc.stopMessages();
+                _currentTopicId = null;
+                _currentView = VIEW_TOPICS;
+            }
+            await svc.deleteTopic(user.familyId, topicId);
+        });
+    });
 
     // Topic items (exclude announcements item)
     _container.querySelectorAll('.chat-topic-item[data-topic-id]').forEach(el => {
@@ -526,7 +576,7 @@ function wireEvents() {
             const text = inputEl.value.trim();
             if (!text) return;
             const user = store.get('user');
-            const authorName = user.kidName || user.displayName || 'הורה';
+            const authorName = user.kidName || user.displayName || t.chat.parentFallback;
             inputEl.value = '';
             inputEl.focus();
             const svc = await getChatService();

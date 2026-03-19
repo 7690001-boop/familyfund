@@ -6,6 +6,7 @@
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import { esc } from '../../utils/dom-helpers.js';
 import * as store from '../../store.js';
+import t from '../../i18n.js';
 
 export function render(container, goals, currentPortfolioValue, options = {}) {
     const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete, onReorder } = options;
@@ -15,12 +16,12 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
     if (goals.length === 0) {
         container.innerHTML = `
             <div class="section-header">
-                <h2>יעדי חיסכון</h2>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-goal-btn">+ יעד</button>' : ''}
+                <h2>${t.goals.title}</h2>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-goal-btn">${t.goals.addBtn}</button>` : ''}
             </div>
             <div class="empty-state">
-                <p>לא הוגדרו יעדים</p>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-first-goal-btn">+ הוסף יעד ראשון</button>' : ''}
+                <p>${t.goals.empty}</p>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-first-goal-btn">${t.goals.addFirst}</button>` : ''}
             </div>
         `;
         if (canAdd && onAdd) {
@@ -50,20 +51,20 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
         let deadlineHtml = '';
         if (deadline && !isNaN(deadline.getTime())) {
             deadlineHtml = `<div class="goal-deadline${overdue ? ' overdue' : ''}">
-                ${overdue ? 'עבר המועד! ' : 'מועד יעד: '}${formatDate(deadline)}
+                ${overdue ? t.goals.overdue : t.goals.deadline}${formatDate(deadline)}
             </div>`;
         }
 
         const reorderBtns = canEdit && sorted.length > 1 ? `
             <span class="goal-reorder-btns">
-                <button class="btn btn-ghost goal-move-up" data-id="${esc(goal.id)}" ${idx === 0 ? 'disabled' : ''} title="העלה">▲</button>
-                <button class="btn btn-ghost goal-move-down" data-id="${esc(goal.id)}" ${idx === sorted.length - 1 ? 'disabled' : ''} title="הורד">▼</button>
+                <button class="btn btn-ghost goal-move-up" data-id="${esc(goal.id)}" ${idx === 0 ? 'disabled' : ''} title="${t.goals.moveUp}">▲</button>
+                <button class="btn btn-ghost goal-move-down" data-id="${esc(goal.id)}" ${idx === sorted.length - 1 ? 'disabled' : ''} title="${t.goals.moveDown}">▼</button>
             </span>
         ` : '';
 
         const editBtns = canEdit ? `
-            <button class="btn btn-ghost edit-goal-btn" data-id="${esc(goal.id)}" title="ערוך">✎</button>
-            <button class="btn btn-ghost danger del-goal-btn" data-id="${esc(goal.id)}" title="מחק">✕</button>
+            <button class="btn btn-ghost edit-goal-btn" data-id="${esc(goal.id)}" title="${t.common.edit}">✎</button>
+            <button class="btn btn-ghost danger del-goal-btn" data-id="${esc(goal.id)}" title="${t.common.delete}">✕</button>
         ` : '';
 
         goalsHtml += `
@@ -73,7 +74,7 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
                         ${reorderBtns}
                         <span class="goal-priority-num">${idx + 1}</span>
                         ${esc(goal.goal_name)}
-                        ${reached ? ' <span class="goal-reached-badge">היעד הושג!</span>' : ''}
+                        ${reached ? ` <span class="goal-reached-badge">${t.goals.reached}</span>` : ''}
                     </span>
                     <span class="goal-right">
                         <span class="goal-amounts">
@@ -93,8 +94,8 @@ export function render(container, goals, currentPortfolioValue, options = {}) {
 
     container.innerHTML = `
         <div class="section-header">
-            <h2>יעדי חיסכון</h2>
-            ${canAdd ? '<button class="btn btn-small btn-primary add-goal-btn">+ יעד</button>' : ''}
+            <h2>${t.goals.title}</h2>
+            ${canAdd ? `<button class="btn btn-small btn-primary add-goal-btn">${t.goals.addBtn}</button>` : ''}
         </div>
         <div class="goals-container">${goalsHtml}</div>
     `;

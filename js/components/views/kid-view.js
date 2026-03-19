@@ -17,7 +17,8 @@ import { showSimulationModal, deleteSimulation } from '../modals/simulation-moda
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { showAvatarModal } from '../modals/avatar-modal.js';
 import { togglePrivacy } from '../../services/family-service.js';
-import { showRenameMemberModal } from '../modals/member-modals.js';
+import { showRenameMemberModal, showChangeSelfPasswordModal } from '../modals/member-modals.js';
+import t from '../../i18n.js';
 
 let _unsubs = [];
 let _container = null;
@@ -66,6 +67,7 @@ function renderView() {
     const member = members.find(m => m.name === _kidName);
     const avatarCfg = member?.avatar || DEFAULT_AVATAR;
 
+    const isManager = user.role === 'manager';
     const investments = kidInvestments(allInvestments, _kidName);
     const goals = kidGoals(allGoals, _kidName);
     const simulations = allSimulations.filter(s => s.kid === _kidName);
@@ -82,15 +84,16 @@ function renderView() {
         <section class="kid-header${isMemberView ? ' member-mode' : ''}">
             <div class="kid-avatar-display" id="kid-avatar">
                 ${renderAvatar(avatarCfg, 72)}
-                ${canEditAvatar ? '<button class="avatar-edit-btn" id="edit-avatar-btn" title="ערוך אווטאר">✏️</button>' : ''}
+                ${canEditAvatar ? `<button class="avatar-edit-btn" id="edit-avatar-btn" title="${t.kidView.editAvatarTitle}">✏️</button>` : ''}
             </div>
-            <h2 class="kid-header-name">${_kidName}${canEditName ? ` <button class="name-edit-btn" id="edit-name-btn" title="שנה שם">✏️</button>` : ''}</h2>
+            <h2 class="kid-header-name">${_kidName}${canEditName ? ` <button class="name-edit-btn" id="edit-name-btn" title="${t.kidView.editNameTitle}">✏️</button>` : ''}</h2>
             ${canTogglePrivacy ? `
-                <label class="privacy-toggle" title="${isPrivate ? 'הסכומים מוסתרים מחברי משפחה אחרים' : 'הסכומים גלויים לכל המשפחה'}">
+                <label class="privacy-toggle" title="${isPrivate ? t.kidView.privateTitle : t.kidView.publicTitle}">
                     <input type="checkbox" id="privacy-checkbox" ${isPrivate ? 'checked' : ''}>
-                    <span class="privacy-toggle-label">${isPrivate ? '🔒 פרטי' : '🔓 גלוי'}</span>
+                    <span class="privacy-toggle-label">${isPrivate ? t.kidView.privateLabel : t.kidView.publicLabel}</span>
                 </label>
             ` : ''}
+            ${isMemberView ? `<button class="btn btn-ghost" id="change-password-btn" style="font-size:0.82rem;margin-top:0.25rem">${t.kidView.changePassword}</button>` : ''}
         </section>
         <section class="summary-cards" data-slot="summary"></section>
         <section class="section" data-slot="assets"></section>
@@ -110,12 +113,18 @@ function renderView() {
         {
             canEdit: can(user, 'investment:edit'),
             canAdd: can(user, 'investment:create'),
+            showHiddenBadge: true,
+            canToggleHidden: can(user, 'investment:toggle-hidden', { kidName: _kidName }),
             onAdd: () => showInvestmentModal(_kidName),
             onEdit: (id) => {
                 const inv = allInvestments.find(i => i.id === id);
                 if (inv) showInvestmentModal(_kidName, inv);
             },
             onDelete: (id) => deleteInvestment(id),
+            onToggleHidden: async (id, hidden) => {
+                const { updateHidden } = await import('../../services/investment-service.js');
+                await updateHidden(user.familyId, id, hidden);
+            },
         }
     );
 
@@ -167,6 +176,11 @@ function renderView() {
     const editNameBtn = _container.querySelector('#edit-name-btn');
     if (editNameBtn && member) {
         editNameBtn.addEventListener('click', () => showRenameMemberModal(member.uid || member.id, _kidName));
+    }
+
+    const changePasswordBtn = _container.querySelector('#change-password-btn');
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', showChangeSelfPasswordModal);
     }
 
     const privacyCheckbox = _container.querySelector('#privacy-checkbox');

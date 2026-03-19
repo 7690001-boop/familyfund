@@ -6,10 +6,10 @@ import { FIREBASE_CDN, firebaseConfig, YAHOO_PROXY } from '../config.js';
 import { getAppDb } from '../firebase-init.js';
 import * as store from '../store.js';
 import { emit } from '../event-bus.js';
+import t from '../i18n.js';
 
 let unsubFamily = null;
 let unsubMembers = null;
-let _backfillDone = false;
 let _fs = null;
 
 async function fs() {
@@ -19,9 +19,8 @@ async function fs() {
 
 export async function listen(familyId) {
     stopListening();
-    _backfillDone = false;
 
-    const { doc, collection, onSnapshot, getDoc, setDoc: setDocFn } = await fs();
+    const { doc, collection, onSnapshot } = await fs();
     const db = getAppDb();
 
     // Listen to family doc
@@ -31,7 +30,7 @@ export async function listen(familyId) {
         }
     }, (err) => {
         console.error('Family listener error:', err);
-        emit('toast', { message: 'שגיאה בטעינת נתוני משפחה', type: 'error' });
+        emit('toast', { message: t.errors.loadFamilyError, type: 'error' });
     });
 
     // Listen to members
@@ -42,19 +41,6 @@ export async function listen(familyId) {
         // Derive kids list from members with role 'member'
         const kids = members.filter(m => m.role === 'member').map(m => m.name);
         store.set('kids', kids);
-
-        // Backfill usernames lookup docs once per session
-        if (!_backfillDone) {
-            _backfillDone = true;
-            for (const member of members) {
-                if (!member.username || member.role !== 'member') continue;
-                const key = member.username.toLowerCase();
-                const existing = await getDoc(doc(db, 'usernames', key));
-                if (!existing.exists()) {
-                    await setDocFn(doc(db, 'usernames', key), { familyId, uid: member.uid || member.id });
-                }
-            }
-        }
     }, (err) => {
         console.error('Members listener error:', err);
     });

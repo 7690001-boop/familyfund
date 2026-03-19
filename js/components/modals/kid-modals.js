@@ -11,14 +11,15 @@ import { open as openModal, close as closeModal } from '../ui/modal.js';
 import * as investmentService from '../../services/investment-service.js';
 import * as goalService from '../../services/goal-service.js';
 import * as familyService from '../../services/family-service.js';
+import t from '../../i18n.js';
 
 export function showKidContextMenu(kid, { onRenamed, onDeleted } = {}) {
     const html = `
         <h2>${esc(kid)}</h2>
         <div style="display:flex;flex-direction:column;gap:0.5rem">
-            <button class="btn btn-secondary" id="ctx-rename">שנה שם</button>
-            <button class="btn btn-danger" id="ctx-delete">מחק ילד/ה</button>
-            <button class="btn btn-secondary" id="ctx-close">סגור</button>
+            <button class="btn btn-secondary" id="ctx-rename">${t.kidModals.renameBtn}</button>
+            <button class="btn btn-danger" id="ctx-delete">${t.kidModals.deleteBtn}</button>
+            <button class="btn btn-secondary" id="ctx-close">${t.common.close}</button>
         </div>
     `;
 
@@ -31,14 +32,14 @@ export function showKidContextMenu(kid, { onRenamed, onDeleted } = {}) {
 
 function showRenameKidModal(kid, onRenamed) {
     const html = `
-        <h2>שינוי שם</h2>
+        <h2>${t.kidModals.renameTitle}</h2>
         <div class="form-group">
-            <label for="kid-new-name">שם חדש</label>
+            <label for="kid-new-name">${t.kidModals.newNameLabel}</label>
             <input type="text" id="kid-new-name" value="${esc(kid)}">
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-primary" id="modal-save">שמור</button>
+            <button class="btn btn-secondary" id="modal-cancel">${t.common.cancel}</button>
+            <button class="btn btn-primary" id="modal-save">${t.common.save}</button>
         </div>
     `;
 
@@ -70,9 +71,9 @@ function showRenameKidModal(kid, onRenamed) {
 
             closeModal();
             if (onRenamed) onRenamed(newName);
-            emit('toast', { message: 'שם עודכן', type: 'success' });
+            emit('toast', { message: t.kidModals.nameUpdated, type: 'success' });
         } catch (e) {
-            emit('toast', { message: 'שגיאה בעדכון שם', type: 'error' });
+            emit('toast', { message: t.kidModals.nameUpdateError, type: 'error' });
         }
     });
     modal.querySelector('#kid-new-name').focus();
@@ -83,11 +84,11 @@ function showDeleteKidModal(kid, onDeleted) {
     const goals = (store.get('goals') || []).filter(g => g.kid === kid);
 
     const html = `
-        <h2>מחיקת ${esc(kid)}?</h2>
-        <p>פעולה זו תמחק את כל ההשקעות (${investments.length}) והיעדים (${goals.length}) של ${esc(kid)}.</p>
+        <h2>${t.kidModals.deleteTitle(esc(kid))}</h2>
+        <p>${t.kidModals.deleteBody(esc(kid), investments.length, goals.length)}</p>
         <div class="modal-actions">
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-danger" id="modal-delete">מחק</button>
+            <button class="btn btn-secondary" id="modal-cancel">${t.common.cancel}</button>
+            <button class="btn btn-danger" id="modal-delete">${t.common.delete}</button>
         </div>
     `;
 
@@ -110,9 +111,9 @@ function showDeleteKidModal(kid, onDeleted) {
 
             closeModal();
             if (onDeleted) onDeleted();
-            emit('toast', { message: kid + ' נמחק/ה', type: 'success' });
+            emit('toast', { message: t.kidModals.deleted(kid), type: 'success' });
         } catch (e) {
-            emit('toast', { message: 'שגיאה במחיקה', type: 'error' });
+            emit('toast', { message: t.kidModals.deleteError, type: 'error' });
             closeModal();
         }
     });

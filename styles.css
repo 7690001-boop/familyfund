@@ -342,6 +342,26 @@ body::after {
     font-weight: 500;
 }
 
+.settings-toggle-row {
+    padding: 0.5rem 0;
+}
+
+.settings-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.settings-toggle-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
 /* --- Ticker autocomplete --- */
 .ticker-autocomplete-wrap {
     position: relative;
@@ -2251,6 +2271,57 @@ body::after {
     transform: translateX(-2px);
 }
 
+/* Topic header row: title + lock button */
+.chat-topic-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 0.15rem;
+}
+
+.chat-topic-header-row .chat-topic-title {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Lock/unlock button on topic items (managers only) */
+.chat-topic-lock-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.1rem 0.25rem;
+    border-radius: var(--radius-sm);
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.chat-topic-item:hover .chat-topic-lock-btn,
+.chat-topic-lock-btn:focus {
+    opacity: 1;
+    background: rgba(0,0,0,0.06);
+}
+
+/* Locked topic: muted appearance */
+.chat-topic-item-locked {
+    opacity: 0.8;
+}
+
+/* Locked notice at bottom of topic view */
+.chat-locked-notice {
+    padding: 0.65rem 1rem;
+    background: #f0f0f0;
+    border-top: 1px solid #ddd;
+    font-size: 0.85rem;
+    color: #636e72;
+    text-align: center;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
 .chat-topic-title {
     font-weight: 700;
     font-size: 0.92rem;
@@ -3749,6 +3820,45 @@ body::after {
 .private-badge {
     font-size: 0.7rem;
     vertical-align: middle;
+}
+
+/* Hidden asset rows — managers see these with muted styling */
+.asset-row-hidden {
+    opacity: 0.6;
+}
+
+.asset-row-hidden:hover {
+    opacity: 0.85;
+}
+
+.hidden-asset-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    background: #f0f0f0;
+    color: #636e72;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 0 0.3rem;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.partial-data-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    color: #e17055;
+    font-weight: 600;
+    margin-right: 0.3rem;
+    cursor: default;
+}
+
+.partial-data-note {
+    font-size: 0.78rem;
+    color: #b2bec3;
+    margin: 0.4rem 0.5rem 0;
+    padding: 0;
 }
 
 /* Avatar Editor Modal */

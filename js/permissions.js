@@ -21,10 +21,14 @@ const RULES = {
     'kid:delete':            (user) => user.role === 'manager',
     'kid:rename':            (user) => user.role === 'manager',
 
-    // Investments — manager only
+    // Investments — manager only, except toggle-hidden which kids can do for their own
     'investment:create':     (user) => user.role === 'manager',
     'investment:edit':       (user) => user.role === 'manager',
     'investment:delete':     (user) => user.role === 'manager',
+    'investment:toggle-hidden': (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
     'investment:view':       (user, ctx) => {
         if (user.role === 'manager') return true;
         return user.kidName === ctx?.kidName;

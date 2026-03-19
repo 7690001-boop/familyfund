@@ -5,6 +5,7 @@
 
 import { formatCurrency, formatPct } from '../../utils/format.js';
 import { gainLossClass } from '../../utils/dom-helpers.js';
+import t from '../../i18n.js';
 
 // Coin metal palettes
 const COIN_METALS = [
@@ -192,7 +193,7 @@ export function render(container, summary, family, investments = [], labelPrefix
             <div class="jar-lid">
                 <div class="jar-lid-knob"></div>
                 <div class="jar-lid-invested">
-                    <div class="jar-lid-label">${labelPrefix}סה״כ הושקע</div>
+                    <div class="jar-lid-label">${labelPrefix}${t.summaryCards.totalInvested}</div>
                     <div class="jar-lid-invested-value">${formatCurrency(summary.totalInvested, sym)}</div>
                 </div>
                 <div class="jar-lid-gainloss ${glClass}">
@@ -207,7 +208,7 @@ export function render(container, summary, family, investments = [], labelPrefix
                     ${coins || '<div class="jar-empty">🪙</div>'}
                 </div>
                 <div class="jar-current-value">
-                    <div class="jar-current-label">${labelPrefix}שווי נוכחי</div>
+                    <div class="jar-current-label">${labelPrefix}${t.summaryCards.currentValue}</div>
                     <div class="jar-current-amount">${formatCurrency(summary.totalCurrent, sym)}</div>
                 </div>
                 <div class="jar-shine"></div>

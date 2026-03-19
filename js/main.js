@@ -9,6 +9,7 @@ import { init as initToast } from './components/ui/toast.js';
 import { init as initModal } from './components/ui/modal.js';
 import { initAvatarStore } from './components/ui/avatar.js';
 import * as store from './store.js';
+import t from './i18n.js';
 
 function spawnFloatingDecorations() {
     const emojis = ['💰', '⭐', '🪙', '🐷', '📈', '🎯', '💎', '🌟', '🎉', '🚀'];
@@ -64,9 +65,9 @@ async function boot() {
             app.innerHTML = `
                 <div class="auth-gate" style="display:flex">
                     <div class="auth-box">
-                        <h2>שגיאה</h2>
-                        <p>לא ניתן להתחבר לשרת. נסה לרענן את הדף.</p>
-                        <button class="btn btn-primary" onclick="location.reload()">רענן</button>
+                        <h2>${t.bootError.title}</h2>
+                        <p>${t.bootError.message}</p>
+                        <button class="btn btn-primary" onclick="location.reload()">${t.bootError.refresh}</button>
                     </div>
                 </div>
             `;

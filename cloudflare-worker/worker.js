@@ -6,7 +6,8 @@
 //   GET  /globes/price?symbol=5137690          — Israeli mutual fund price via Globes API
 //   GET  /globes/search?q=מיטב                — search Israeli funds by name/number
 //   GET  /globes/history?symbol=5137690&date=2025-03-06 — historical NAV
-//   POST /login             { email, password }                         — rate-limited auth proxy
+//   POST /login             { email, password }                         — rate-limited auth proxy (managers)
+//   POST /member-login      { username, password }                      — server-side username lookup + dual rate limiting (members)
 //   POST /reset-password   { memberUid, newPassword }  Authorization: Bearer <idToken>
 //
 // Required Cloudflare secrets (set via: wrangler secret put NAME):
@@ -49,6 +50,12 @@ export default {
         if (url.pathname === '/login') {
             if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
             return handleLogin(request, env, origin, allowedOrigin);
+        }
+
+        // Member login — POST only (server-side username lookup + dual rate limiting)
+        if (url.pathname === '/member-login') {
+            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
+            return handleMemberLogin(request, env, origin, allowedOrigin);
         }
 
         // Password reset — POST only
@@ -336,6 +343,149 @@ async function createCustomToken(env, uid) {
         .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
     return `${toSign}.${encodedSig}`;
+}
+
+// ─── Member Login Handler (server-side username lookup + dual rate limiting) ─
+
+const MAX_USERNAME_ATTEMPTS = 5;
+const USERNAME_BACKOFF_BASE_S = 120; // 2 minutes initial lockout
+
+function calcUsernameBackoffSeconds(failCount) {
+    if (failCount <= MAX_USERNAME_ATTEMPTS) return 0;
+    const extra = failCount - MAX_USERNAME_ATTEMPTS;
+    return Math.min(Math.pow(2, extra - 1) * USERNAME_BACKOFF_BASE_S, MAX_BACKOFF_S);
+}
+
+function usernameToEmail(username, familyId) {
+    const safeUser = username.toLowerCase().replace(/[^a-z0-9\u0590-\u05ff]/g, '_');
+    const safeFam = familyId.replace(/[^a-zA-Z0-9]/g, '_');
+    return `${safeUser}__${safeFam}@member.saveing.local`;
+}
+
+async function handleMemberLogin(request, env, origin, allowedOrigin) {
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+    // ── Parse body ──
+    let body;
+    try { body = await request.json(); }
+    catch { return corsResponse(JSON.stringify({ error: 'Invalid JSON' }), 400, origin, allowedOrigin); }
+
+    const { username, password } = body;
+    if (!username || !password) {
+        return corsResponse(JSON.stringify({ error: 'username and password required' }), 400, origin, allowedOrigin);
+    }
+
+    const normalizedUsername = username.toLowerCase().trim();
+    const ipKey = `rl:${ip}`;
+    const userKey = `rl:user:${normalizedUsername}`;
+
+    // ── Dual rate-limit check (IP + username) ──
+    if (env.RATE_LIMIT) {
+        // Check IP-based rate limit
+        const ipData = await env.RATE_LIMIT.get(ipKey, 'json') || { failCount: 0, lockedUntil: 0 };
+        if (ipData.lockedUntil > Date.now()) {
+            const retryAfter = Math.ceil((ipData.lockedUntil - Date.now()) / 1000);
+            console.log(`→ member-login blocked (IP): ip=${ip}, retryAfter=${retryAfter}s`);
+            return new Response(
+                JSON.stringify({ error: 'Too many attempts', retryAfter }),
+                { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': String(retryAfter), ...corsHeaders(origin, allowedOrigin) } }
+            );
+        }
+
+        // Check username-based rate limit (stricter)
+        const userData = await env.RATE_LIMIT.get(userKey, 'json') || { failCount: 0, lockedUntil: 0 };
+        if (userData.lockedUntil > Date.now()) {
+            const retryAfter = Math.ceil((userData.lockedUntil - Date.now()) / 1000);
+            console.log(`→ member-login blocked (username): user=${normalizedUsername}, retryAfter=${retryAfter}s`);
+            return new Response(
+                JSON.stringify({ error: 'Too many attempts', retryAfter }),
+                { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': String(retryAfter), ...corsHeaders(origin, allowedOrigin) } }
+            );
+        }
+    } else {
+        console.warn('→ RATE_LIMIT KV not configured — brute-force protection disabled');
+    }
+
+    // ── Server-side username lookup ──
+    let accessToken;
+    try { accessToken = await getServiceAccountToken(env); }
+    catch (e) {
+        console.error('SA token error:', e.message);
+        return corsResponse(JSON.stringify({ error: 'Server error' }), 500, origin, allowedOrigin);
+    }
+
+    const usernameDoc = await fetchFirestoreDoc(accessToken, env.FIREBASE_PROJECT_ID, 'usernames', normalizedUsername);
+
+    if (!usernameDoc || !usernameDoc.familyId) {
+        // Username not found — increment rate limits but return specific error
+        await incrementDualRateLimit(env, ipKey, userKey);
+        console.log(`→ member-login: username not found: ${normalizedUsername}`);
+        return corsResponse(JSON.stringify({ error: 'USERNAME_NOT_FOUND' }), 401, origin, allowedOrigin);
+    }
+
+    const familyId = usernameDoc.familyId;
+    const syntheticEmail = usernameToEmail(normalizedUsername, familyId);
+
+    // ── Authenticate via Firebase Identity Toolkit ──
+    const authRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${env.FIREBASE_API_KEY}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: syntheticEmail, password, returnSecureToken: true }),
+        }
+    );
+
+    if (!authRes.ok) {
+        await incrementDualRateLimit(env, ipKey, userKey);
+        console.log(`→ member-login failed (wrong password): user=${normalizedUsername}, ip=${ip}`);
+        return corsResponse(JSON.stringify({ error: 'INVALID_PASSWORD' }), 401, origin, allowedOrigin);
+    }
+
+    // ── Success — reset both counters ──
+    if (env.RATE_LIMIT) {
+        await Promise.all([
+            env.RATE_LIMIT.delete(ipKey),
+            env.RATE_LIMIT.delete(userKey),
+        ]);
+    }
+
+    const authData = await authRes.json();
+    const uid = authData.localId;
+
+    let customToken;
+    try { customToken = await createCustomToken(env, uid); }
+    catch (e) {
+        console.error('Custom token error:', e.message);
+        return corsResponse(JSON.stringify({ error: 'Server error' }), 500, origin, allowedOrigin);
+    }
+
+    console.log(`→ member-login OK: user=${normalizedUsername}, ip=${ip}, uid=${uid}`);
+    return corsResponse(JSON.stringify({ customToken }), 200, origin, allowedOrigin);
+}
+
+// Increment both IP and username rate-limit counters
+async function incrementDualRateLimit(env, ipKey, userKey) {
+    if (!env.RATE_LIMIT) return;
+
+    // IP-based (standard limits)
+    const ipData = await env.RATE_LIMIT.get(ipKey, 'json') || { failCount: 0, lockedUntil: 0 };
+    const ipCount = ipData.failCount + 1;
+    const ipBackoff = calcBackoffSeconds(ipCount);
+    const ipLocked = ipBackoff > 0 ? Date.now() + ipBackoff * 1000 : 0;
+    const ipTtl = Math.max(ipBackoff + 60, 600);
+
+    // Username-based (stricter limits)
+    const userData = await env.RATE_LIMIT.get(userKey, 'json') || { failCount: 0, lockedUntil: 0 };
+    const userCount = userData.failCount + 1;
+    const userBackoff = calcUsernameBackoffSeconds(userCount);
+    const userLocked = userBackoff > 0 ? Date.now() + userBackoff * 1000 : 0;
+    const userTtl = Math.max(userBackoff + 60, 600);
+
+    await Promise.all([
+        env.RATE_LIMIT.put(ipKey, JSON.stringify({ failCount: ipCount, lockedUntil: ipLocked }), { expirationTtl: ipTtl }),
+        env.RATE_LIMIT.put(userKey, JSON.stringify({ failCount: userCount, lockedUntil: userLocked }), { expirationTtl: userTtl }),
+    ]);
 }
 
 // ─── Rate-limit helper for password reset ────────────────────────────────────
@@ -689,6 +839,8 @@ function corsHeaders(origin, allowedOrigin) {
         'Access-Control-Allow-Origin': allowed ? origin : allowedOrigin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Referrer-Policy': 'no-referrer',
+        'X-Content-Type-Options': 'nosniff',
     };
 }
 

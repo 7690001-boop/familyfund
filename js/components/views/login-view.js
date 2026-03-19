@@ -4,6 +4,7 @@
 // ============================================================
 
 import * as authService from '../../services/auth-service.js';
+import t from '../../i18n.js';
 
 let container = null;
 let showSignup = false;
@@ -38,21 +39,21 @@ function renderLogin() {
     return `
         <div id="login-form">
             <p style="color:var(--color-text-muted);font-size:0.88rem;margin-bottom:1rem">
-                הכנס עם שם משתמש או אימייל
+                ${t.login.subtitle}
             </p>
             <div class="form-group">
-                <label for="login-identifier">שם משתמש או אימייל</label>
-                <input type="text" id="login-identifier" placeholder="למשל: דניאל או email@example.com" autocomplete="username">
+                <label for="login-identifier">${t.login.identifierLabel}</label>
+                <input type="text" id="login-identifier" placeholder="${t.login.identifierPlaceholder}" autocomplete="username">
             </div>
             <div class="form-group">
-                <label for="login-password">סיסמה</label>
-                <input type="password" id="login-password" placeholder="סיסמה" autocomplete="current-password">
+                <label for="login-password">${t.login.passwordLabel}</label>
+                <input type="password" id="login-password" placeholder="${t.login.passwordPlaceholder}" autocomplete="current-password">
             </div>
             <div id="login-error" class="auth-error" hidden></div>
-            <button id="login-btn" class="btn btn-primary btn-large" style="width:100%">כניסה</button>
+            <button id="login-btn" class="btn btn-primary btn-large" style="width:100%">${t.login.loginBtn}</button>
             <div style="margin-top:1rem;text-align:center">
                 <button id="switch-to-signup" class="btn btn-ghost" style="font-size:0.88rem">
-                    אין לך חשבון? הרשם כמנהל משפחה
+                    ${t.login.noAccount}
                 </button>
             </div>
         </div>
@@ -63,22 +64,22 @@ function renderSignup() {
     return `
         <div id="signup-form">
             <div class="form-group">
-                <label for="signup-email">אימייל</label>
+                <label for="signup-email">${t.login.emailLabel}</label>
                 <input type="email" id="signup-email" placeholder="email@example.com" dir="ltr" autocomplete="email">
             </div>
             <div class="form-group">
-                <label for="signup-password">סיסמה</label>
-                <input type="password" id="signup-password" placeholder="לפחות 6 תווים" autocomplete="new-password">
+                <label for="signup-password">${t.login.passwordLabel}</label>
+                <input type="password" id="signup-password" placeholder="${t.login.signupPasswordPlaceholder}" autocomplete="new-password">
             </div>
             <div class="form-group">
-                <label for="signup-password-confirm">אימות סיסמה</label>
-                <input type="password" id="signup-password-confirm" placeholder="הזן סיסמה שוב" autocomplete="new-password">
+                <label for="signup-password-confirm">${t.login.confirmPasswordLabel}</label>
+                <input type="password" id="signup-password-confirm" placeholder="${t.login.confirmPasswordPlaceholder}" autocomplete="new-password">
             </div>
             <div id="signup-error" class="auth-error" hidden></div>
-            <button id="signup-btn" class="btn btn-primary btn-large" style="width:100%">הרשמה</button>
+            <button id="signup-btn" class="btn btn-primary btn-large" style="width:100%">${t.login.signupBtn}</button>
             <div style="margin-top:1rem;text-align:center">
                 <button id="switch-to-login" class="btn btn-ghost" style="font-size:0.88rem">
-                    יש לך חשבון? התחבר
+                    ${t.login.hasAccount}
                 </button>
             </div>
         </div>
@@ -137,12 +138,12 @@ async function handleLogin() {
     const btn = container.querySelector('#login-btn');
 
     if (!identifier || !password) {
-        showError(errorEl, 'נא למלא שם משתמש/אימייל וסיסמה');
+        showError(errorEl, t.errors.fillUsernameAndPassword);
         return;
     }
 
     btn.disabled = true;
-    btn.textContent = 'מתחבר...';
+    btn.textContent = t.common.connecting;
     errorEl.hidden = true;
 
     try {
@@ -150,25 +151,18 @@ async function handleLogin() {
             // Email login (manager / system)
             await authService.login(identifier, password);
         } else {
-            // Username login (member) — look up familyId first
-            const familyId = await authService.lookupFamilyIdByUsername(identifier);
-            if (!familyId) {
-                showError(errorEl, 'שם משתמש לא נמצא');
-                btn.disabled = false;
-                btn.textContent = 'כניסה';
-                return;
-            }
-            await authService.loginWithUsername(identifier, password, familyId);
+            // Username login (member) — server-side lookup via worker
+            await authService.loginWithUsername(identifier, password);
         }
         // onAuthStateChanged will handle routing
     } catch (e) {
-        const msg = e.code === 'auth/invalid-credential' ? 'שם משתמש/אימייל או סיסמה שגויים'
-            : e.code === 'auth/user-not-found' ? 'משתמש לא נמצא'
-            : e.code === 'auth/too-many-requests' ? 'יותר מדי ניסיונות, נסה מאוחר יותר'
-            : 'שגיאה בהתחברות: ' + e.message;
+        const msg = e.code === 'auth/invalid-credential' ? t.errors.wrongPassword
+            : e.code === 'auth/user-not-found' ? t.errors.userNotFound
+            : e.code === 'auth/too-many-requests' ? t.errors.tooManyAttempts
+            : t.errors.loginError(e.message);
         showError(errorEl, msg);
         btn.disabled = false;
-        btn.textContent = 'כניסה';
+        btn.textContent = t.login.loginBtn;
     }
 }
 
@@ -180,20 +174,20 @@ async function handleSignup() {
     const btn = container.querySelector('#signup-btn');
 
     if (!email || !password) {
-        showError(errorEl, 'נא למלא אימייל וסיסמה');
+        showError(errorEl, t.errors.fillEmailAndPassword);
         return;
     }
     if (password.length < 6) {
-        showError(errorEl, 'סיסמה חייבת להכיל לפחות 6 תווים');
+        showError(errorEl, t.errors.passwordTooShort);
         return;
     }
     if (password !== confirmPassword) {
-        showError(errorEl, 'הסיסמאות לא תואמות');
+        showError(errorEl, t.errors.passwordMismatch);
         return;
     }
 
     btn.disabled = true;
-    btn.textContent = 'נרשם...';
+    btn.textContent = t.common.registering;
     errorEl.hidden = true;
 
     try {
@@ -207,12 +201,12 @@ async function handleSignup() {
             username: null,
         });
     } catch (e) {
-        const msg = e.code === 'auth/email-already-in-use' ? 'אימייל כבר רשום'
-            : e.code === 'auth/weak-password' ? 'סיסמה חלשה מדי'
-            : 'שגיאה בהרשמה: ' + e.message;
+        const msg = e.code === 'auth/email-already-in-use' ? t.errors.emailAlreadyInUse
+            : e.code === 'auth/weak-password' ? t.errors.passwordWeak
+            : t.errors.signupError(e.message);
         showError(errorEl, msg);
         btn.disabled = false;
-        btn.textContent = 'הרשמה';
+        btn.textContent = t.login.signupBtn;
     }
 }
 

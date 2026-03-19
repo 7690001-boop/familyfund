@@ -4,6 +4,7 @@
 
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import * as store from '../../store.js';
+import t from '../../i18n.js';
 
 export function render(container, matching, family) {
     if (!family?.sp500_ticker) {
@@ -18,9 +19,9 @@ export function render(container, matching, family) {
     if (matching.deposits.length === 0) {
         container.innerHTML = `
             <div class="section-header">
-                <h2>תוכנית התאמת S&P 500</h2>
+                <h2>${t.matching.title}</h2>
             </div>
-            <div class="empty-state">אין השקעות S&P 500</div>
+            <div class="empty-state">${t.matching.empty}</div>
         `;
         return;
     }
@@ -29,7 +30,7 @@ export function render(container, matching, family) {
 
     let rows = '';
     matching.deposits.forEach(dep => {
-        const statusText = dep.eligible ? 'זכאי להתאמה' : 'עוד ' + dep.daysRemaining + ' ימים';
+        const statusText = dep.eligible ? t.matching.eligible : t.matching.daysLeft(dep.daysRemaining);
         const statusClass = dep.eligible ? 'status-eligible' : 'status-pending';
 
         rows += `<tr>
@@ -43,11 +44,11 @@ export function render(container, matching, family) {
 
     container.innerHTML = `
         <div class="section-header">
-            <h2>תוכנית התאמת S&P 500</h2>
+            <h2>${t.matching.title}</h2>
         </div>
         <div class="matching-summary">
             <div class="matching-summary-text">
-                סה״כ הותאם: ${formatCurrency(matching.matched, sym)} מתוך ${formatCurrency(matching.total, sym)}
+                ${t.matching.totalMatched(formatCurrency(matching.matched, sym), formatCurrency(matching.total, sym))}
             </div>
             <div class="matching-progress-bar">
                 <div class="matching-progress-fill" style="width:${pct * 100}%"></div>
@@ -57,11 +58,11 @@ export function render(container, matching, family) {
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>תאריך הפקדה</th>
-                        <th>סכום</th>
-                        <th>ימים מוחזק</th>
-                        <th>סטטוס</th>
-                        <th>סכום מותאם</th>
+                        <th>${t.matching.headerDate}</th>
+                        <th>${t.matching.headerAmount}</th>
+                        <th>${t.matching.headerDays}</th>
+                        <th>${t.matching.headerStatus}</th>
+                        <th>${t.matching.headerMatched}</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>

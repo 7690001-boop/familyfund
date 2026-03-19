@@ -9,6 +9,7 @@ import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import * as summaryCards from '../ui/summary-cards.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { isImpersonating, getParentUser } from '../../services/impersonate.js';
+import t from '../../i18n.js';
 
 let _unsubs = [];
 let _container = null;
@@ -61,10 +62,12 @@ function renderView() {
     let totalMatchable = 0;
 
     let rows = '';
+    let anyHiddenVisible = false;
     kids.forEach(kid => {
-        const inv = kidInvestments(rawInvestments, kid);
+        const inv = kidInvestments(rawInvestments, kid, false);
         const sum = computeSummary(inv);
         const match = computeMatching(inv, family);
+        const hiddenCount = rawInvestments.filter(i => i.kid === kid && i.hidden).length;
 
         const member = members.find(m => m.name === kid);
         const avatarCfg = member?.avatar || DEFAULT_AVATAR;
@@ -80,11 +83,14 @@ function renderView() {
             visibleInvestments = visibleInvestments.concat(inv.map(calcInvestment));
             totalMatched += match.matched;
             totalMatchable += match.total;
+            if (hiddenCount > 0) anyHiddenVisible = true;
         }
 
         const glClass = hideAmounts ? '' : cellGainLossClass(sum.gainLoss);
+        const partialBadge = !hideAmounts && hiddenCount > 0
+            ? ` <span class="partial-data-badge" title="${t.familyView.partialNote}">${t.familyView.partialBadge}</span>` : '';
         rows += `<tr>
-            <td><span class="family-kid-cell">${avatarSvg}<span>${esc(kid)}</span>${kidIsPrivate ? ' <span class="private-badge">🔒</span>' : ''}</span></td>
+            <td><span class="family-kid-cell">${avatarSvg}<span>${esc(kid)}</span>${kidIsPrivate ? ' <span class="private-badge">🔒</span>' : ''}${partialBadge}</span></td>
             <td class="cell-number">${hideAmounts ? hiddenLabel : formatCurrency(sum.totalInvested, sym)}</td>
             <td class="cell-number">${hideAmounts ? hiddenLabel : formatCurrency(sum.totalCurrent, sym)}</td>
             <td class="cell-number ${glClass}">${hideAmounts ? hiddenLabel : formatCurrency(sum.gainLoss, sym)}</td>
@@ -101,29 +107,30 @@ function renderView() {
         <section class="summary-cards" data-slot="summary"></section>
 
         <section class="section">
-            <h2>השוואת ילדים</h2>
+            <h2>${t.familyView.kidsCompare}</h2>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>ילד/ה</th>
-                            <th>הושקע</th>
-                            <th>שווי נוכחי</th>
-                            <th>רווח/הפסד</th>
-                            <th>%</th>
-                            <th>התאמה (מתוך סה״כ)</th>
+                            <th>${t.familyView.headerKid}</th>
+                            <th>${t.familyView.headerInvested}</th>
+                            <th>${t.familyView.headerCurrent}</th>
+                            <th>${t.familyView.headerGainLoss}</th>
+                            <th>${t.familyView.headerPct}</th>
+                            <th>${t.familyView.headerMatching}</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
                 </table>
             </div>
+            ${anyHiddenVisible ? `<p class="partial-data-note">${t.familyView.partialNote}</p>` : ''}
         </section>
 
         <section class="section">
-            <h2>סיכום התאמה משפחתי</h2>
+            <h2>${t.familyView.matchingSummary}</h2>
             <div class="matching-summary">
                 <div class="matching-summary-text">
-                    סה״כ הותאם (משפחה): ${formatCurrency(totalMatched, sym)} מתוך ${formatCurrency(totalMatchable, sym)}
+                    ${t.familyView.matchedTotal(formatCurrency(totalMatched, sym), formatCurrency(totalMatchable, sym))}
                 </div>
                 <div class="matching-progress-bar">
                     <div class="matching-progress-fill" style="width:${matchPct * 100}%"></div>
@@ -134,6 +141,6 @@ function renderView() {
 
     summaryCards.render(
         _container.querySelector('[data-slot="summary"]'),
-        familySummary, family, visibleInvestments, '(משפחה) '
+        familySummary, family, visibleInvestments, t.familyView.labelPrefixFamily
     );
 }

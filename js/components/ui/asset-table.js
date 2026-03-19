@@ -7,6 +7,7 @@ import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import * as store from '../../store.js';
 import { aggregateByTicker } from '../../utils/compute.js';
+import t from '../../i18n.js';
 
 let _currentSort = { key: 'purchase_date', dir: 'desc' };
 
@@ -42,7 +43,7 @@ function sortInvestments(investments, sortKey, sortDir) {
 }
 
 export function render(container, investments, options = {}) {
-    const { canEdit = false, canAdd = false, onAdd, onEdit, onDelete } = options;
+    const { canEdit = false, canAdd = false, showHiddenBadge = false, canToggleHidden = false, onAdd, onEdit, onDelete, onToggleHidden } = options;
     const family = store.get('family') || {};
     const ilsSym = family.currency_symbol || '₪';
 
@@ -52,12 +53,12 @@ export function render(container, investments, options = {}) {
     if (investments.length === 0) {
         container.innerHTML = `
             <div class="section-header">
-                <h2>פירוט נכסים</h2>
-                ${canAdd ? '<div class="section-actions"><button class="btn btn-small btn-primary add-inv-btn">+ השקעה</button></div>' : ''}
+                <h2>${t.assets.title}</h2>
+                ${canAdd ? `<div class="section-actions"><button class="btn btn-small btn-primary add-inv-btn">${t.assets.addBtn}</button></div>` : ''}
             </div>
             <div class="empty-state">
-                <p>אין השקעות להצגה</p>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-first-inv-btn">+ הוסף השקעה ראשונה</button>' : ''}
+                <p>${t.assets.empty}</p>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-first-inv-btn">${t.assets.addFirst}</button>` : ''}
             </div>
         `;
         if (canAdd) {
@@ -70,7 +71,7 @@ export function render(container, investments, options = {}) {
     }
 
     let actionsHeader = '';
-    if (canEdit) actionsHeader = '<th>פעולות</th>';
+    if (canEdit || canToggleHidden) actionsHeader = `<th>${t.assets.headerActions}</th>`;
 
     // Keep original for re-sort; work with sorted copy
     const originalInvestments = investments;
@@ -124,10 +125,12 @@ export function render(container, investments, options = {}) {
             }
 
             const countBadge = pos.purchaseCount > 1
-                ? ` <span class="cell-line-sub">${pos.purchaseCount} רכישות</span>` : '';
-            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}</span>${countBadge}`;
+                ? ` <span class="cell-line-sub">${t.assets.purchaseCount(pos.purchaseCount)}</span>` : '';
+            const posHiddenBadge = showHiddenBadge && pos.someHidden
+                ? ` <span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
+            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}</span>${countBadge}`;
 
-            posRows += `<tr>
+            posRows += `<tr${pos.someHidden ? ' class="asset-row-hidden"' : ''}>
                 <td>${nameCell}</td>
                 <td class="cell-number">${esc(pos.ticker || '—')}</td>
                 ${posFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
@@ -142,21 +145,21 @@ export function render(container, investments, options = {}) {
         });
 
         consolidatedHtml = `
-            <h3 class="section-sub-header">פוזיציות מאוחדות</h3>
+            <h3 class="section-sub-header">${t.assets.consolidatedTitle}</h3>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>נכס</th>
-                            <th>טיקר</th>
-                            ${posFx ? '<th>מטבע</th>' : ''}
-                            <th>יחידות</th>
-                            <th>הושקע</th>
-                            <th>עלות ממוצעת</th>
-                            <th>מחיר נוכחי</th>
-                            <th>שווי נוכחי</th>
-                            <th>רווח/הפסד</th>
-                            <th>%</th>
+                            <th>${t.assets.headerAsset}</th>
+                            <th>${t.assets.headerTicker}</th>
+                            ${posFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
+                            <th>${t.assets.headerShares}</th>
+                            <th>${t.assets.headerInvested}</th>
+                            <th>${t.assets.headerAvgCost}</th>
+                            <th>${t.assets.headerCurrentPrice}</th>
+                            <th>${t.assets.headerCurrentValue}</th>
+                            <th>${t.assets.headerGainLoss}</th>
+                            <th>${t.assets.headerPct}</th>
                         </tr>
                     </thead>
                     <tbody>${posRows}</tbody>
@@ -175,11 +178,15 @@ export function render(container, investments, options = {}) {
         const glClass = cellGainLossClass(inv.gainLossILS);
 
         let actionsCol = '';
-        if (canEdit) {
-            actionsCol = `<td class="cell-actions">
-                <button class="btn btn-ghost edit-inv-btn" data-id="${esc(inv.id)}" title="ערוך">✎</button>
-                <button class="btn btn-ghost danger del-inv-btn" data-id="${esc(inv.id)}" title="מחק">✕</button>
-            </td>`;
+        if (canEdit || canToggleHidden) {
+            const hideBtn = canToggleHidden
+                ? `<button class="btn btn-ghost toggle-hidden-btn" data-id="${esc(inv.id)}" data-hidden="${!!inv.hidden}" title="${inv.hidden ? 'הצג במבט המשפחה' : 'הסתר ממבט המשפחה'}">${inv.hidden ? '👁' : '🙈'}</button>`
+                : '';
+            const editDeleteBtns = canEdit
+                ? `<button class="btn btn-ghost edit-inv-btn" data-id="${esc(inv.id)}" title="${t.common.edit}">✎</button>
+                <button class="btn btn-ghost danger del-inv-btn" data-id="${esc(inv.id)}" title="${t.common.delete}">✕</button>`
+                : '';
+            actionsCol = `<td class="cell-actions">${hideBtn}${editDeleteBtns}</td>`;
         }
 
         // Current price cell — always in native currency
@@ -217,11 +224,13 @@ export function render(container, investments, options = {}) {
                 + `<span class="cell-line-sub">${formatCurrency(inv.amountInvestedNative, nativeSym, natDec)}</span>`;
         }
 
+        const hiddenBadgeHtml = showHiddenBadge && inv.hidden
+            ? `<span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
         const nameCell = inv.nickname
-            ? `<span class="cell-line-main">${esc(inv.nickname)}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span>`
-            : esc(inv.asset_name || '—');
+            ? `<span class="cell-line-main">${esc(inv.nickname)}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span>`
+            : `${esc(inv.asset_name || '—')}${hiddenBadgeHtml}`;
 
-        rows += `<tr>
+        rows += `<tr${inv.hidden ? ' class="asset-row-hidden"' : ''}>
             <td>${nameCell}</td>
             <td class="cell-number">${esc(inv.ticker || '—')}</td>
             ${hasFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
@@ -237,12 +246,12 @@ export function render(container, investments, options = {}) {
     });
 
     const sortOptions = [
-        { key: 'purchase_date', label: 'תאריך' },
-        { key: 'name', label: 'שם' },
-        { key: 'amount_invested', label: 'הושקע' },
-        { key: 'current_value', label: 'שווי' },
-        { key: 'gain_loss', label: 'רווח/הפסד' },
-        { key: 'gain_loss_pct', label: '%' },
+        { key: 'purchase_date', label: t.assets.sortDate },
+        { key: 'name', label: t.assets.sortName },
+        { key: 'amount_invested', label: t.assets.sortInvested },
+        { key: 'current_value', label: t.assets.sortValue },
+        { key: 'gain_loss', label: t.assets.sortGainLoss },
+        { key: 'gain_loss_pct', label: t.assets.headerPct },
     ];
     const sortBarHtml = sortOptions.map(o => {
         const active = _currentSort.key === o.key;
@@ -252,29 +261,29 @@ export function render(container, investments, options = {}) {
 
     container.innerHTML = `
         <div class="section-header">
-            <h2>פירוט נכסים</h2>
+            <h2>${t.assets.title}</h2>
             <div class="section-actions">
-                <button class="btn btn-small btn-secondary fetch-prices-btn" title="עדכן מחירים מהאינטרנט">עדכן מחירים</button>
-                ${canAdd ? '<button class="btn btn-small btn-primary add-inv-btn">+ השקעה</button>' : ''}
+                <button class="btn btn-small btn-secondary fetch-prices-btn">${t.assets.updatePrices}</button>
+                ${canAdd ? `<button class="btn btn-small btn-primary add-inv-btn">${t.assets.addBtn}</button>` : ''}
             </div>
         </div>
-        <div class="sort-bar"><span class="sort-label">מיון:</span> ${sortBarHtml}</div>
+        <div class="sort-bar"><span class="sort-label">${t.assets.sortLabel}</span> ${sortBarHtml}</div>
         ${consolidatedHtml}
-        ${hasMultiPurchase ? '<h3 class="section-sub-header">עסקאות</h3>' : ''}
+        ${hasMultiPurchase ? `<h3 class="section-sub-header">${t.assets.transactionsTitle}</h3>` : ''}
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>נכס</th>
-                        <th>טיקר</th>
-                        ${hasFx ? '<th>מטבע</th>' : ''}
-                        <th>תאריך רכישה</th>
-                        <th>יחידות</th>
-                        <th>הושקע</th>
-                        <th>מחיר נוכחי</th>
-                        <th>שווי נוכחי</th>
-                        <th>רווח/הפסד</th>
-                        <th>%</th>
+                        <th>${t.assets.headerAsset}</th>
+                        <th>${t.assets.headerTicker}</th>
+                        ${hasFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
+                        <th>${t.assets.headerDate}</th>
+                        <th>${t.assets.headerShares}</th>
+                        <th>${t.assets.headerInvested}</th>
+                        <th>${t.assets.headerCurrentPrice}</th>
+                        <th>${t.assets.headerCurrentValue}</th>
+                        <th>${t.assets.headerGainLoss}</th>
+                        <th>${t.assets.headerPct}</th>
                         ${actionsHeader}
                     </tr>
                 </thead>
@@ -298,6 +307,12 @@ export function render(container, investments, options = {}) {
     if (canEdit && onDelete) {
         container.querySelectorAll('.del-inv-btn').forEach(btn => {
             btn.addEventListener('click', () => onDelete(btn.dataset.id));
+        });
+    }
+
+    if (canToggleHidden && onToggleHidden) {
+        container.querySelectorAll('.toggle-hidden-btn').forEach(btn => {
+            btn.addEventListener('click', () => onToggleHidden(btn.dataset.id, btn.dataset.hidden !== 'true'));
         });
     }
 

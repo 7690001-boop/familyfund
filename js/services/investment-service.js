@@ -59,6 +59,12 @@ export async function remove(familyId, investmentId) {
     await deleteDoc(doc(db, 'families', familyId, 'investments', investmentId));
 }
 
+export async function updateHidden(familyId, investmentId, hidden) {
+    const { doc, updateDoc } = await fs();
+    const db = getAppDb();
+    await updateDoc(doc(db, 'families', familyId, 'investments', investmentId), { hidden });
+}
+
 // Batch update prices (and optionally currencies) for all investments with matching tickers
 export async function updatePrices(familyId, priceMap, currencyMap) {
     const { doc, updateDoc } = await fs();

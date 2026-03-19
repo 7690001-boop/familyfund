@@ -6,13 +6,9 @@ import * as store from '../../store.js';
 import { esc } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
+import t from '../../i18n.js';
 
-const PRESETS = [
-    { label: 'שמרני 4%', value: 4 },
-    { label: 'מאוזן 7%', value: 7 },
-    { label: 'S&P 500 ~10%', value: 10 },
-    { label: 'אגרסיבי 12%', value: 12 },
-];
+const PRESETS = t.simulation.presets;
 
 let _historicalData = null;
 
@@ -35,8 +31,8 @@ export function showSimulationModal(kid, existing) {
     const user = store.get('user');
     const s = existing || {};
 
-    const title = isEdit ? 'עריכת סימולציה' : 'סימולציית השקעה';
-    const saveLabel = isEdit ? 'שמור' : 'צור סימולציה';
+    const title = isEdit ? t.simulation.titleEdit : t.simulation.titleAdd;
+    const saveLabel = isEdit ? t.simulation.saveBtnEdit : t.simulation.saveBtnCreate;
 
     const editType = s.type || 'fixed';
     const editRate = s.annual_return_pct;
@@ -50,64 +46,64 @@ export function showSimulationModal(kid, existing) {
     const html = `
         <h2>${title}</h2>
         <div class="form-group">
-            <label for="sim-name">שם הסימולציה</label>
-            <input type="text" id="sim-name" placeholder="למשל: חיסכון לאוניברסיטה" value="${esc(s.name || '')}">
+            <label for="sim-name">${t.simulation.nameLabel}</label>
+            <input type="text" id="sim-name" placeholder="${t.simulation.namePlaceholder}" value="${esc(s.name || '')}">
         </div>
 
         <div class="form-group">
-            <label>סוג סימולציה</label>
+            <label>${t.simulation.typeLabel}</label>
             <div class="sim-type-bar">
-                <button type="button" class="sim-type-btn${editType === 'fixed' ? ' active' : ''}" data-type="fixed">תשואה קבועה</button>
-                <button type="button" class="sim-type-btn${editType === 'historical' ? ' active' : ''}" data-type="historical">נתונים היסטוריים</button>
+                <button type="button" class="sim-type-btn${editType === 'fixed' ? ' active' : ''}" data-type="fixed">${t.simulation.typeFixed}</button>
+                <button type="button" class="sim-type-btn${editType === 'historical' ? ' active' : ''}" data-type="historical">${t.simulation.typeHistorical}</button>
             </div>
         </div>
 
         <div id="sim-fixed-section"${editType !== 'fixed' ? ' class="hidden"' : ''}>
             <div class="form-group">
-                <label>תשואה שנתית</label>
+                <label>${t.simulation.annualReturnLabel}</label>
                 <div class="sim-preset-bar">${presetsHtml}
-                    <button type="button" class="sim-preset-btn${isCustomRate ? ' active' : ''}" data-value="custom">מותאם אישית</button>
+                    <button type="button" class="sim-preset-btn${isCustomRate ? ' active' : ''}" data-value="custom">${t.simulation.customRateBtn}</button>
                 </div>
-                <input type="number" id="sim-custom-rate" step="0.1" min="0" max="50" placeholder="% תשואה" class="sim-custom-rate${isCustomRate ? '' : ' hidden'}" value="${isCustomRate ? editRate : ''}">
+                <input type="number" id="sim-custom-rate" step="0.1" min="0" max="50" placeholder="${t.simulation.customRatePlaceholder}" class="sim-custom-rate${isCustomRate ? '' : ' hidden'}" value="${isCustomRate ? editRate : ''}">
             </div>
         </div>
 
         <div id="sim-historical-section"${editType !== 'historical' ? ' class="hidden"' : ''}>
             <div class="form-group">
-                <label>מדד</label>
+                <label>${t.simulation.indexLabel}</label>
                 <div class="sim-preset-bar">
-                    <button type="button" class="sim-index-btn${editIndex === 'sp500' ? ' active' : ''}" data-index="sp500">S&P 500</button>
-                    <button type="button" class="sim-index-btn${editIndex === 'total_us' ? ' active' : ''}" data-index="total_us">שוק אמריקאי מלא</button>
-                    <button type="button" class="sim-index-btn${editIndex === 'world' ? ' active' : ''}" data-index="world">מדד עולמי</button>
+                    <button type="button" class="sim-index-btn${editIndex === 'sp500' ? ' active' : ''}" data-index="sp500">${t.simulation.indexNames.sp500}</button>
+                    <button type="button" class="sim-index-btn${editIndex === 'total_us' ? ' active' : ''}" data-index="total_us">${t.simulation.indexNames.total_us}</button>
+                    <button type="button" class="sim-index-btn${editIndex === 'world' ? ' active' : ''}" data-index="world">${t.simulation.indexNames.world}</button>
                 </div>
             </div>
             <div class="form-group">
-                <label for="sim-start-date">שנת התחלה</label>
+                <label for="sim-start-date">${t.simulation.startYearLabel}</label>
                 <input type="number" id="sim-start-date" min="1970" max="2024" value="${s.start_year || 2000}" placeholder="1970-2024">
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="sim-initial">סכום התחלתי (${sym})</label>
+                <label for="sim-initial">${t.simulation.initialLabel(sym)}</label>
                 <input type="number" id="sim-initial" step="any" min="0" value="${s.initial_amount ?? 1000}">
             </div>
             <div class="form-group">
-                <label for="sim-monthly">הפקדה חודשית (${sym})</label>
+                <label for="sim-monthly">${t.simulation.monthlyLabel(sym)}</label>
                 <input type="number" id="sim-monthly" step="any" min="0" value="${s.monthly_contribution ?? 100}">
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="sim-years">מספר שנים</label>
+                <label for="sim-years">${t.simulation.yearsLabel}</label>
                 <input type="number" id="sim-years" min="1" max="50" value="${s.years || 10}">
             </div>
         </div>
 
         <div class="modal-actions">
-            ${isEdit ? '<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">מחק</button>' : ''}
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
+            ${isEdit ? `<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">${t.common.delete}</button>` : ''}
+            <button class="btn btn-secondary" id="modal-cancel">${t.common.cancel}</button>
             <button class="btn btn-primary" id="modal-save">${saveLabel}</button>
         </div>
     `;
@@ -209,15 +205,15 @@ export function showSimulationModal(kid, existing) {
                 const { update } = await import('../../services/simulation-service.js');
                 await update(user.familyId, existing.id, record);
                 closeModal();
-                emit('toast', { message: 'סימולציה עודכנה', type: 'success' });
+                emit('toast', { message: t.simulation.updatedToast, type: 'success' });
             } else {
                 const { add } = await import('../../services/simulation-service.js');
                 await add(user.familyId, record);
                 closeModal();
-                emit('toast', { message: 'סימולציה נוצרה', type: 'success' });
+                emit('toast', { message: t.simulation.addedToast, type: 'success' });
             }
         } catch (e) {
-            emit('toast', { message: 'שגיאה בשמירת סימולציה', type: 'error' });
+            emit('toast', { message: t.simulation.saveErrorToast, type: 'error' });
         }
     });
 
@@ -229,9 +225,9 @@ export async function deleteSimulation(id) {
         const user = store.get('user');
         const { remove } = await import('../../services/simulation-service.js');
         await remove(user.familyId, id);
-        emit('toast', { message: 'סימולציה נמחקה', type: 'success' });
+        emit('toast', { message: t.simulation.deletedToast, type: 'success' });
     } catch (e) {
-        emit('toast', { message: 'שגיאה במחיקת סימולציה', type: 'error' });
+        emit('toast', { message: t.simulation.deleteErrorToast, type: 'error' });
     }
 }
 

@@ -7,10 +7,11 @@ import { esc } from '../../utils/dom-helpers.js';
 import { toDateStr } from '../../utils/format.js';
 import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
+import t from '../../i18n.js';
 
 export function showGoalModal(kid, existing) {
     const isEdit = !!existing;
-    const title = isEdit ? 'עריכת יעד' : 'הוספת יעד';
+    const title = isEdit ? t.goalModal.titleEdit : t.goalModal.titleAdd;
     const g = existing || {};
     const family = store.get('family') || {};
     const sym = family.currency_symbol || '₪';
@@ -19,23 +20,23 @@ export function showGoalModal(kid, existing) {
     const html = `
         <h2>${title}</h2>
         <div class="form-group">
-            <label for="goal-name">שם היעד</label>
-            <input type="text" id="goal-name" placeholder="למשל: אופניים חדשים" value="${esc(g.goal_name || '')}">
+            <label for="goal-name">${t.goalModal.nameLabel}</label>
+            <input type="text" id="goal-name" placeholder="${t.goalModal.namePlaceholder}" value="${esc(g.goal_name || '')}">
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="goal-target">סכום יעד (${sym})</label>
+                <label for="goal-target">${t.goalModal.targetLabel(sym)}</label>
                 <input type="number" id="goal-target" step="any" min="0" value="${g.target_amount || ''}">
             </div>
             <div class="form-group">
-                <label for="goal-deadline">תאריך יעד (אופציונלי)</label>
+                <label for="goal-deadline">${t.goalModal.deadlineLabel}</label>
                 <input type="date" id="goal-deadline" value="${toDateStr(g.deadline)}">
             </div>
         </div>
         <div class="modal-actions">
-            ${isEdit ? '<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">מחק</button>' : ''}
-            <button class="btn btn-secondary" id="modal-cancel">ביטול</button>
-            <button class="btn btn-primary" id="modal-save">שמור</button>
+            ${isEdit ? `<button class="btn btn-danger" id="modal-delete" style="margin-inline-end:auto">${t.common.delete}</button>` : ''}
+            <button class="btn btn-secondary" id="modal-cancel">${t.common.cancel}</button>
+            <button class="btn btn-primary" id="modal-save">${t.common.save}</button>
         </div>
     `;
 
@@ -67,9 +68,9 @@ export function showGoalModal(kid, existing) {
                 await add(user.familyId, record);
             }
             closeModal();
-            emit('toast', { message: isEdit ? 'יעד עודכן' : 'יעד נוסף', type: 'success' });
+            emit('toast', { message: isEdit ? t.goalModal.updatedToast : t.goalModal.addedToast, type: 'success' });
         } catch (e) {
-            emit('toast', { message: 'שגיאה בשמירת יעד', type: 'error' });
+            emit('toast', { message: t.goalModal.saveErrorToast, type: 'error' });
         }
     });
 
@@ -88,8 +89,8 @@ export async function deleteGoal(id) {
         const user = store.get('user');
         const { remove } = await import('../../services/goal-service.js');
         await remove(user.familyId, id);
-        emit('toast', { message: 'יעד נמחק', type: 'success' });
+        emit('toast', { message: t.goalModal.deletedToast, type: 'success' });
     } catch (e) {
-        emit('toast', { message: 'שגיאה במחיקת יעד', type: 'error' });
+        emit('toast', { message: t.goalModal.deleteErrorToast, type: 'error' });
     }
 }
