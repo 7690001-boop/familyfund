@@ -6874,3 +6874,25 @@ tr:has(.cash-type-badge) {
     gap: 0.5rem;
     margin-top: 0.25rem;
 }
+
+
+/* ============================================================
+   Investment Report Modal
+   ============================================================ */
+
+.modal-divider {
+    border: none;
+    border-top: 1px solid #e8e4ff;
+    margin: 1.25rem 0;
+}
+
+.report-section {
+    margin-bottom: 0.25rem;
+}
+
+.report-section h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #5b4fcf;
+    margin: 0 0 0.35rem;
+}

@@ -18,6 +18,7 @@ import { showAddMemberModal, showManageMembersModal, showRenameMemberModal } fro
 import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
 import { exportData, importData } from '../modals/data-transfer.js';
+import { showInvestmentReportModal } from '../modals/investment-report-modal.js';
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { renderJar, JAR_LABELS } from '../ui/jar.js';
 import { switchToMember, switchBack, isImpersonating, getParentUser } from '../../services/impersonate.js';
@@ -167,6 +168,7 @@ function renderShell() {
         if (can(effectiveUser, 'data:export')) {
             headerActions += `<button id="export-btn" class="btn btn-icon" title="${t.dashboard.exportTitle}">${t.dashboard.exportData}</button>`;
             headerActions += `<button id="import-btn" class="btn btn-icon" title="${t.dashboard.importTitle}">${t.dashboard.importData}</button>`;
+            headerActions += `<button id="report-btn" class="btn btn-icon" title="${t.report.btnTitle}">📊</button>`;
         }
         if (can(effectiveUser, 'family:edit')) {
             headerActions += `<button id="announcements-btn" class="btn btn-small" title="${t.announcements.manageBtn}">${t.announcements.manageBtn}</button>`;
@@ -402,6 +404,9 @@ function wireShellEvents() {
 
     const exportBtn = _container.querySelector('#export-btn');
     if (exportBtn) exportBtn.addEventListener('click', exportData);
+
+    const reportBtn = _container.querySelector('#report-btn');
+    if (reportBtn) reportBtn.addEventListener('click', showInvestmentReportModal);
 
     const importBtn = _container.querySelector('#import-btn');
     const importFile = _container.querySelector('#import-file');
