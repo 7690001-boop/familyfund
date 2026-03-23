@@ -6723,6 +6723,11 @@ tr:has(.cash-type-badge) {
     color: #854d0e;
 }
 
+.import-badge.new-cat {
+    background: #e0f2fe;
+    color: #075985;
+}
+
 /* ── Market Ticker Bar ──────────────────────────────────────── */
 #market-ticker-bar {
     position: sticky;

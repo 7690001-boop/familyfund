@@ -67,7 +67,9 @@ function renderView() {
         ? topics.filter(t => t.category === _activeFilter)
         : topics;
 
-    const filterPills = ['', ...CATEGORIES].map(cat => {
+    const customCats = [...new Set(topics.map(tp => tp.category).filter(c => c && !CATEGORIES.includes(c)))];
+    const allCats = [...CATEGORIES, ...customCats];
+    const filterPills = ['', ...allCats].map(cat => {
         const label = cat || t.school.filterAll;
         const active = _activeFilter === cat ? ' active' : '';
         return `<button class="school-filter-pill${active}" data-cat="${esc(cat)}">${esc(label)}</button>`;
@@ -90,8 +92,8 @@ function renderView() {
                     </div>
                     <div class="school-manager-btns">
                         ${isManager ? `<button class="btn btn-secondary school-seed-btn" id="school-seed-topics-btn">${t.school.seedTopicsBtn}</button>` : ''}
-                        <button class="btn btn-secondary school-import-btn" id="school-import-btn">${t.school.importTopicBtn}</button>
-                        <button class="btn btn-primary school-add-btn" id="school-add-topic-btn">${t.school.addTopicBtn}</button>
+                        ${isManager ? `<button class="btn btn-secondary school-import-btn" id="school-import-btn">${t.school.importTopicBtn}</button>` : ''}
+                        ${isManager ? `<button class="btn btn-primary school-add-btn" id="school-add-topic-btn">${t.school.addTopicBtn}</button>` : ''}
                     </div>
                 </div>
                 <div class="school-filters">${filterPills}</div>

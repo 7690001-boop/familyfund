@@ -135,7 +135,7 @@ function renderGameBuilder(container) {
     });
 }
 
-export function showTopicModal(familyId, user, existingTopic = null) {
+export function showTopicModal(familyId, user, existingTopic = null, initialCategory = null) {
     const isEditMode = existingTopic != null;
 
     // Initialize quiz questions
@@ -154,6 +154,8 @@ export function showTopicModal(familyId, user, existingTopic = null) {
 
     const hasGame = _gamePairs.length > 0;
     const isDraft = isEditMode ? existingTopic.status === 'draft' : false;
+    const currentCategory = isEditMode ? existingTopic.category : (initialCategory || '');
+    const isCustomCategory = currentCategory && !CATEGORIES.includes(currentCategory);
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -175,8 +177,13 @@ export function showTopicModal(familyId, user, existingTopic = null) {
                 <div class="form-group">
                     <label class="form-label">${t.school.topicCategoryLabel}</label>
                     <select class="form-input" id="topic-category">
-                        ${CATEGORIES.map(c => `<option value="${esc(c)}" ${(existingTopic?.category === c) ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                        ${CATEGORIES.map(c => `<option value="${esc(c)}" ${currentCategory === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                        <option value="__custom__" ${isCustomCategory ? 'selected' : ''}>${esc(t.school.topicCategoryCustom)}</option>
                     </select>
+                    <input type="text" class="form-input" id="topic-category-custom"
+                           placeholder="${esc(t.school.topicCategoryCustomPlaceholder)}"
+                           value="${esc(isCustomCategory ? currentCategory : '')}"
+                           style="margin-top:0.5rem;display:${isCustomCategory ? 'block' : 'none'}" maxlength="40" />
                 </div>
 
                 <div class="form-group">
@@ -232,20 +239,26 @@ export function showTopicModal(familyId, user, existingTopic = null) {
     renderQuizBuilder(overlay);
     if (hasGame) renderGameBuilder(overlay);
 
-    const titleInput    = overlay.querySelector('#topic-title');
-    const categoryInput = overlay.querySelector('#topic-category');
-    const contentInput  = overlay.querySelector('#topic-content');
-    const isDraftInput  = overlay.querySelector('#topic-is-draft');
-    const hasGameInput  = overlay.querySelector('#topic-has-game');
-    const gameBuilderEl = overlay.querySelector('#game-builder');
-    const errorEl       = overlay.querySelector('#topic-modal-error');
-    const submitBtn     = overlay.querySelector('#topic-modal-submit');
+    const titleInput          = overlay.querySelector('#topic-title');
+    const categoryInput       = overlay.querySelector('#topic-category');
+    const customCategoryInput = overlay.querySelector('#topic-category-custom');
+    const contentInput        = overlay.querySelector('#topic-content');
+    const isDraftInput        = overlay.querySelector('#topic-is-draft');
+    const hasGameInput        = overlay.querySelector('#topic-has-game');
+    const gameBuilderEl       = overlay.querySelector('#game-builder');
+    const errorEl             = overlay.querySelector('#topic-modal-error');
+    const submitBtn           = overlay.querySelector('#topic-modal-submit');
 
     const close = () => { _questions = []; _gamePairs = []; overlay.remove(); };
 
     overlay.querySelector('#topic-modal-close').addEventListener('click', close);
     overlay.querySelector('#topic-modal-cancel').addEventListener('click', close);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    categoryInput.addEventListener('change', () => {
+        customCategoryInput.style.display = categoryInput.value === '__custom__' ? 'block' : 'none';
+        if (categoryInput.value === '__custom__') customCategoryInput.focus();
+    });
 
     hasGameInput.addEventListener('change', () => {
         if (hasGameInput.checked) {
@@ -271,7 +284,9 @@ export function showTopicModal(familyId, user, existingTopic = null) {
     submitBtn.addEventListener('click', async () => {
         errorEl.hidden = true;
         const title    = titleInput.value.trim();
-        const category = categoryInput.value;
+        const category = categoryInput.value === '__custom__'
+            ? (customCategoryInput.value.trim() || 'כללי')
+            : categoryInput.value;
         const content  = contentInput.value.trim();
         const status   = isDraftInput.checked ? 'draft' : 'published';
 

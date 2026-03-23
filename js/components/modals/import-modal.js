@@ -61,7 +61,7 @@ function parseJson(raw) {
         if (!item || typeof item !== 'object' || !String(item.title || '').trim()) continue;
         topics.push({
             title:    String(item.title).trim(),
-            category: VALID_CATEGORIES.includes(item.category) ? item.category : 'כללי',
+            category: (typeof item.category === 'string' && item.category.trim()) ? item.category.trim() : 'כללי',
             content:  String(item.content || '').trim(),
             status:   item.status === 'draft' ? 'draft' : 'published',
             quiz:     normalizeQuiz(item.quiz),
@@ -101,6 +101,7 @@ function previewCardHtml(topic, idx) {
     if (topic.quiz?.length)        badges.push(`<span class="import-badge quiz">${t.school.importQuizCount(topic.quiz.length)}</span>`);
     if (topic.game?.pairs?.length) badges.push(`<span class="import-badge game">${t.school.importGamePairs(topic.game.pairs.length)}</span>`);
     if (topic.status === 'draft')  badges.push(`<span class="import-badge draft">${t.school.draftBadge}</span>`);
+    if (!VALID_CATEGORIES.includes(topic.category)) badges.push(`<span class="import-badge new-cat">📌 ${t.school.importNewCategory}</span>`);
     return `
         <label class="import-preview-card">
             <input type="checkbox" class="import-topic-check" data-idx="${idx}" checked />
@@ -172,6 +173,7 @@ export function showImportModal(familyId, user) {
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="import-modal-cancel">${t.common.cancel}</button>
+                <button class="btn btn-secondary" id="import-add-manual-btn">${t.school.importAddManualBtn}</button>
                 <button class="btn btn-primary" id="import-submit-btn" hidden></button>
             </div>
         </div>
@@ -195,6 +197,13 @@ export function showImportModal(familyId, user) {
 
     // Template download
     overlay.querySelector('#import-template-btn').addEventListener('click', downloadTemplate);
+
+    // Add topic manually — close import modal and open topic modal
+    overlay.querySelector('#import-add-manual-btn').addEventListener('click', async () => {
+        close();
+        const { showTopicModal } = await import('./topic-modal.js');
+        showTopicModal(familyId, user);
+    });
 
     // ── Shared parse & preview logic ──────────────────────────
 

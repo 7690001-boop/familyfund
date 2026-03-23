@@ -880,6 +880,10 @@ export default {
         importQuizCount:        (n) => `🧠 ${n} שאלות`,
         importGamePairs:        (n) => `🎮 ${n} זוגות`,
         exportTopicBtn:         '⬇ ייצוא',
+        importAddManualBtn:     '✏️ הוסף נושא ידנית',
+        importNewCategory:      'קטגוריה חדשה',
+        topicCategoryCustom:    '+ קטגוריה חדשה...',
+        topicCategoryCustomPlaceholder: 'שם הקטגוריה החדשה',
     },
 
 };
