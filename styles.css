@@ -2868,16 +2868,16 @@ body::after {
     }
 
     .kid-mode-header {
-        padding: 0.4rem 1rem !important;
+        padding: 0.5rem 1rem 0 !important;
     }
 
     .kid-mode-tabs {
-        min-height: 130px;
-        padding: 0.6rem 0.75rem 0;
+        min-height: 140px;
+        padding: 0.4rem 0.75rem 0;
     }
 
     .kid-identity-card {
-        padding: 0.75rem 1.75rem 0.65rem;
+        padding: 0.75rem 3rem 0.65rem;
     }
 
     .kid-id-graphics {
@@ -3646,64 +3646,99 @@ body::after {
     margin-top: 0.3rem;
 }
 
-/* === Kid Mode Header — slim, actions only === */
+/* === Kid Mode Header — merges seamlessly into tabs-nav below === */
 .kid-mode-header {
-    padding: 0.55rem 1.5rem !important;
+    padding: 0.75rem 1.5rem 0 !important;
     display: flex !important;
     align-items: center;
     justify-content: flex-end;
-    background: linear-gradient(135deg, #8b7cf8 0%, #e879b2 60%, #f9a825 100%) !important;
-    box-shadow: 0 4px 20px rgba(139, 124, 248, 0.3) !important;
+    background: linear-gradient(160deg, #4a3ec9 0%, #7c6fe8 50%, #d966a8 100%) !important;
+    box-shadow: none !important;
+    position: relative !important;
+}
+
+/* Decorative blobs behind the header gradient */
+.kid-mode-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 260px 120px at 20% 50%, rgba(255,255,255,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 180px 100px at 80% 30%, rgba(255,200,100,0.1) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 /* === Kid Mode Tabs-nav === */
 .kid-mode-tabs {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: flex-end;
-    min-height: 155px;
-    padding: 0.85rem 1.5rem 0;
+    min-height: 180px;
+    padding: 0.5rem 1.5rem 0.8rem;
     gap: 0;
-    background: var(--color-surface);
-    border-bottom: 2px solid var(--color-border);
-    box-shadow: 0 4px 12px rgba(108,92,231,0.06);
+    background: linear-gradient(160deg, #4a3ec9 0%, #7c6fe8 50%, #d966a8 100%);
+    border-bottom: none;
+    box-shadow: 0 12px 40px rgba(74, 62, 201, 0.45);
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible;
+    position: relative;
 }
 
-/* Flex wrapper that centers the identity card */
+/* Decorative blobs in the tabs area */
+.kid-mode-tabs::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 300px 200px at 10% 80%, rgba(255,255,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 150px at 90% 20%, rgba(255,180,220,0.12) 0%, transparent 70%),
+        radial-gradient(circle 80px at 50% 10%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Identity card row — takes full width so tab buttons wrap below */
 .kid-tab-area {
+    flex: 0 0 100%;
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    flex: 1;
+    position: relative;
+    z-index: 1;
 }
 
-/* === Unified Identity Card === */
+/* === Unified Identity Card — glassmorphism on gradient === */
 .kid-identity-card {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.65rem;
-    padding: 1rem 2.75rem 0.8rem;
-    background: linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(240,236,255,0.94) 100%);
+    padding: 1rem 7rem 0.8rem;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-radius: 22px 22px 0 0;
-    border: 1.5px solid rgba(108,92,231,0.12);
+    border: 1.5px solid rgba(255,255,255,0.28);
     border-bottom: 4px solid transparent;
     box-shadow:
-        0 -4px 22px rgba(108,92,231,0.08),
-        0 2px 10px rgba(0,0,0,0.04),
-        inset 0 1px 0 rgba(255,255,255,1);
+        0 -6px 28px rgba(0,0,0,0.1),
+        0 2px 12px rgba(0,0,0,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.5);
     cursor: default;
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     animation: pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .kid-identity-card.active {
-    border-bottom-color: var(--color-tab-active);
-    background: linear-gradient(160deg, rgba(255,255,255,1) 0%, rgba(232,228,255,0.98) 100%);
+    border-bottom-color: rgba(255,255,255,0.9);
+    background: rgba(255,255,255,0.25);
     box-shadow:
-        0 -6px 32px rgba(108,92,231,0.18),
-        0 4px 16px rgba(108,92,231,0.1),
-        inset 0 1px 0 rgba(255,255,255,1);
-    transform: translateY(-2px);
+        0 -10px 40px rgba(0,0,0,0.14),
+        0 4px 18px rgba(0,0,0,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.7);
+    transform: translateY(-4px);
 }
 
 /* The two graphical elements side by side */
@@ -3788,16 +3823,16 @@ body::after {
 .kid-id-avatar svg {
     border-radius: 50%;
     box-shadow:
-        0 0 0 3px rgba(108,92,231,0.2),
-        0 6px 22px rgba(0,0,0,0.12);
+        0 0 0 3px rgba(255,255,255,0.5),
+        0 6px 22px rgba(0,0,0,0.18);
     transition: box-shadow 0.25s;
     display: block;
 }
 
 .kid-identity-card.active .kid-id-avatar svg {
     box-shadow:
-        0 0 0 4px var(--color-tab-active),
-        0 8px 26px rgba(108,92,231,0.28);
+        0 0 0 4px rgba(255,255,255,0.9),
+        0 8px 28px rgba(0,0,0,0.22);
 }
 
 /* Sparkles on the avatar */
@@ -3855,8 +3890,9 @@ body::after {
 .kid-id-name {
     font-size: 1.15rem;
     font-weight: 700;
-    color: var(--color-text);
+    color: rgba(255,255,255,0.95);
     letter-spacing: 0.02em;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.2);
 }
 
 .name-edit-btn {
@@ -3864,39 +3900,44 @@ body::after {
     border: none;
     cursor: pointer;
     font-size: 0.75rem;
-    opacity: 0.5;
+    opacity: 0.6;
     padding: 0.1rem 0.2rem;
     vertical-align: middle;
     transition: opacity 0.15s;
+    filter: brightness(0) invert(1);
 }
 .name-edit-btn:hover {
     opacity: 1;
 }
 
-/* Family tab — pushed to far side, vertically centered */
-.kid-mode-tabs .tab-btn-family {
-    margin-inline-start: auto;
-    align-self: center;
-    margin-bottom: 0.75rem;
-    color: var(--color-text-muted);
+/* Tab buttons inside kid gradient banner */
+.kid-mode-tabs .tab-btn {
+    color: rgba(255,255,255,0.8);
     font-size: 0.9rem;
-    opacity: 0.72;
-    border-radius: 12px;
-    border-bottom: 4px solid transparent;
 }
-
-.kid-mode-tabs .tab-btn-family:hover {
-    opacity: 1;
-    background: var(--color-tab-hover);
-    color: var(--color-accent2);
-}
-
-.kid-mode-tabs .tab-btn-family.active {
-    opacity: 1;
+.kid-mode-tabs .tab-btn:hover {
+    background: rgba(255,255,255,0.2);
     color: white;
-    border-bottom-color: transparent;
-    background: linear-gradient(135deg, #6c5ce7, #8b7cf8);
-    box-shadow: 0 3px 12px rgba(108,92,231,0.35);
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+.kid-mode-tabs .tab-btn.active {
+    background: rgba(255,255,255,0.92);
+    color: #5649d6;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+}
+
+/* Family + school tabs — sit as a centered row at the bottom of the banner */
+.kid-mode-tabs .tab-btn-family,
+.kid-mode-tabs .tab-btn-school {
+    margin: 0 0.4rem;
+    align-self: center;
+    border-radius: 50px;
+    border-bottom: none;
+    padding: 0.45rem 1.4rem;
+    font-size: 0.9rem;
+    position: relative;
+    z-index: 1;
 }
 
 /* === Jar Picker Modal === */
@@ -6895,4 +6936,15 @@ tr:has(.cash-type-badge) {
     font-weight: 700;
     color: #5b4fcf;
     margin: 0 0 0.35rem;
+}
+
+.email-locked {
+    font-size: 0.9rem;
+    color: #555;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 0.45rem 0.75rem;
+    font-family: monospace;
+    letter-spacing: 0.02em;
 }

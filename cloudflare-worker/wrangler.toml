@@ -8,6 +8,7 @@ compatibility_date = "2025-01-01"
 #   ALLOWED_ORIGIN
 #   FIREBASE_SA_EMAIL
 #   FIREBASE_SA_PRIVATE_KEY
+#   RESEND_API_KEY
 
 # KV namespace for brute-force rate limiting on /login
 # Setup: wrangler kv namespace create "RATE_LIMIT"

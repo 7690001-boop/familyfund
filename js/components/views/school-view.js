@@ -92,6 +92,7 @@ function renderView() {
                     </div>
                     <div class="school-manager-btns">
                         ${isManager ? `<button class="btn btn-secondary school-seed-btn" id="school-seed-topics-btn">${t.school.seedTopicsBtn}</button>` : ''}
+                        ${isManager ? `<button class="btn btn-secondary school-export-all-btn" id="school-export-all-btn">${t.school.exportAllTopicsBtn}</button>` : ''}
                         ${isManager ? `<button class="btn btn-secondary school-import-btn" id="school-import-btn">${t.school.importTopicBtn}</button>` : ''}
                         ${isManager ? `<button class="btn btn-primary school-add-btn" id="school-add-topic-btn">${t.school.addTopicBtn}</button>` : ''}
                     </div>
@@ -485,6 +486,13 @@ function wireEvents() {
         }
     });
 
+    // Export all button
+    _container.querySelector('#school-export-all-btn')?.addEventListener('click', () => {
+        const topics = store.get('schoolTopics') || [];
+        if (topics.length === 0) return;
+        exportAllTopics(topics);
+    });
+
     // Import button
     _container.querySelector('#school-import-btn')?.addEventListener('click', async () => {
         const { showImportModal } = await import('../modals/import-modal.js');
@@ -621,6 +629,28 @@ function exportTopic(topic) {
     const a    = document.createElement('a');
     a.href     = url;
     a.download = `${topic.title.replace(/[^\w\u0590-\u05FF]/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportAllTopics(topics) {
+    const data = topics.map(topic => {
+        const obj = {
+            title:    topic.title,
+            category: topic.category,
+            content:  topic.content || '',
+            status:   topic.status || 'published',
+        };
+        if (topic.quiz?.length)        obj.quiz = topic.quiz;
+        if (topic.game?.pairs?.length) obj.game = topic.game;
+        return obj;
+    });
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'school-topics.json';
     a.click();
     URL.revokeObjectURL(url);
 }

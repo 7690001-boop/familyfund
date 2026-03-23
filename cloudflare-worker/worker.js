@@ -9,6 +9,7 @@
 //   POST /login             { email, password }                         — rate-limited auth proxy (managers)
 //   POST /member-login      { username, password }                      — server-side username lookup + dual rate limiting (members)
 //   POST /reset-password   { memberUid, newPassword }  Authorization: Bearer <idToken>
+//   POST /send-report-email { to, familyName, xlsxBase64, dateStr }  Authorization: Bearer <Firebase ID token>
 //
 // Required Cloudflare secrets (set via: wrangler secret put NAME):
 //   FIREBASE_SA_EMAIL       — service account email
@@ -16,6 +17,7 @@
 //   FIREBASE_API_KEY        — Firebase Web API key
 //   FIREBASE_PROJECT_ID     — Firebase project ID
 //   ALLOWED_ORIGIN          — allowed CORS origin (e.g. https://your-app.web.app)
+//   RESEND_API_KEY          — Resend API key for email delivery
 //
 // Required KV namespace binding (wrangler.toml):
 //   RATE_LIMIT              — KV namespace for brute-force rate limiting
@@ -70,6 +72,12 @@ export default {
             return handleRenameMember(request, env, origin, allowedOrigin);
         }
 
+        // Send investment report email — POST only (server-to-server, auth via X-Email-Secret)
+        if (url.pathname === '/send-report-email') {
+            if (method !== 'POST') return corsResponse(JSON.stringify({ error: 'Method not allowed' }), 405, origin, allowedOrigin);
+            return handleSendReportEmail(request, env, origin, allowedOrigin);
+        }
+
         let upstreamUrl;
 
         if (url.pathname === '/search') {
@@ -107,6 +115,56 @@ export default {
         }
     },
 };
+
+// ─── Email Handler ────────────────────────────────────────────────────────────
+
+async function handleSendReportEmail(request, env, origin, allowedOrigin) {
+    // Verify Firebase ID token — any authenticated user may call this
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+        return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin, allowedOrigin);
+    }
+    const idToken = authHeader.slice(7);
+    const lookupRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
+    );
+    if (!lookupRes.ok) return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin, allowedOrigin);
+    const uid = (await lookupRes.json()).users?.[0]?.localId;
+    if (!uid) return corsResponse(JSON.stringify({ error: 'Unauthorized' }), 401, origin, allowedOrigin);
+
+    if (!env.RESEND_API_KEY) {
+        return corsResponse(JSON.stringify({ error: 'RESEND_API_KEY not configured' }), 500, origin, allowedOrigin);
+    }
+
+    const { to, familyName, xlsxBase64, dateStr } = await request.json();
+    const safeName = familyName || 'המשפחה שלנו';
+
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            from: `משפחת ${safeName} <onboarding@resend.dev>`,
+            to: [to],
+            subject: `דוח השקעות — ${safeName} — ${dateStr}`,
+            text: `שלום,\n\nמצורף דוח ההשקעות של ${safeName} לתאריך ${dateStr}.\n\nFamily Money`,
+            attachments: [{
+                filename: `investment-report-${dateStr.replace(/\./g, '-')}.xlsx`,
+                content: xlsxBase64,
+            }],
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.text();
+        console.error(`[send-report-email] Resend error ${res.status}: ${err}`);
+        return corsResponse(JSON.stringify({ error: 'Email send failed' }), 502, origin, allowedOrigin);
+    }
+    return corsResponse(JSON.stringify({ success: true }), 200, origin, allowedOrigin);
+}
 
 // ─── Globes API Handlers (Israeli mutual funds) ──────────────────────────────
 

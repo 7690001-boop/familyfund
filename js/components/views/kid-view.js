@@ -142,6 +142,7 @@ function renderView() {
             familyId: user.familyId,
             sym: family.currency_symbol || '₪',
             canEdit: can(user, 'investment:edit'),
+            canNote: can(user, 'investment:note', { kidName: _kidName }),
             canRename: can(user, 'investment:rename', { kidName: _kidName }),
             canSell,
             onEdit: (id) => {

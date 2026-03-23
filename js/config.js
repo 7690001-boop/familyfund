@@ -20,6 +20,7 @@ export const FIREBASE_CDN = 'https://www.gstatic.com/firebasejs/10.14.1';
 export const YAHOO_PROXY      = 'https://yahoo-proxy.7690001.workers.dev';
 export const WORKER_LOGIN_URL = YAHOO_PROXY + '/login';
 export const WORKER_MEMBER_LOGIN_URL = YAHOO_PROXY + '/member-login';
+export const WORKER_SEND_EMAIL_URL = YAHOO_PROXY + '/send-report-email';
 export const YAHOO_CHART_URL  = YAHOO_PROXY + '/chart';
 export const YAHOO_SEARCH_URL = YAHOO_PROXY + '/search';
 

@@ -152,6 +152,45 @@ export async function signup(email, password) {
     return createUserWithEmailAndPassword(auth, email, password);
 }
 
+/**
+ * Sign in (or sign up) with Google popup.
+ * If the email already exists with email/password, Firebase auto-links for trusted providers (Google).
+ * Returns { user, isNewUser } so the caller can create a Firestore profile if needed.
+ */
+export async function signInWithGoogle() {
+    const { signInWithPopup, GoogleAuthProvider } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const auth = getAppAuth();
+    const provider = new GoogleAuthProvider();
+
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const isNewUser = result._tokenResponse?.isNewUser ?? false;
+        return { user: result.user, isNewUser };
+    } catch (e) {
+        if (e.code === 'auth/account-exists-with-different-credential') {
+            // Email exists with password provider — need manual linking
+            const pendingCred = GoogleAuthProvider.credentialFromError(e);
+            const err = new Error(t.errors.googleAccountExistsNeedLink);
+            err.code = 'auth/needs-link';
+            err.pendingCred = pendingCred;
+            err.email = e.customData?.email;
+            throw err;
+        }
+        throw e;
+    }
+}
+
+/**
+ * Link Google credential to the current signed-in user (after password re-auth).
+ */
+export async function linkGoogleAfterPassword(email, password, pendingCred) {
+    const { signInWithEmailAndPassword, linkWithCredential } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
+    const auth = getAppAuth();
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    await linkWithCredential(result.user, pendingCred);
+    return result.user;
+}
+
 export async function logout() {
     const { signOut } = await import(`${FIREBASE_CDN}/firebase-auth.js`);
     const auth = getAppAuth();

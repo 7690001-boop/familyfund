@@ -33,6 +33,10 @@ const RULES = {
         if (user.role === 'manager') return true;
         return user.role === 'member' && user.kidName === ctx?.kidName;
     },
+    'investment:note': (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
     'investment:view':       (user, ctx) => {
         if (user.role === 'manager') return true;
         return user.kidName === ctx?.kidName;

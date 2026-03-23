@@ -7,16 +7,12 @@ const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
-const nodemailer = require('nodemailer');
-
 // ============================================================
 // Investment Report — Excel generation + email
-// SMTP config via environment variables:
-//   SMTP_HOST (default: smtp.gmail.com)
-//   SMTP_PORT (default: 587)
-//   SMTP_USER (required for email)
-//   SMTP_PASS (required for email)
-// Set via: firebase functions:secrets:set SMTP_USER or .env file
+// Email is sent via the Cloudflare Worker (/send-report-email)
+// which calls Resend API. Required environment variables (functions/.env):
+//   WORKER_URL        — Cloudflare Worker base URL
+//   FIREBASE_API_KEY  — Firebase Web API key (public, used to exchange custom token for ID token)
 // ============================================================
 
 function _computeInv(inv, exchangeRates) {
@@ -85,61 +81,102 @@ function _generateExcel(familyData, investments, exchangeRates) {
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+async function _getSystemIdToken() {
+    const apiKey = process.env.FIREBASE_API_KEY;
+    if (!apiKey) throw new HttpsError('failed-precondition', 'FIREBASE_API_KEY not configured');
+
+    const customToken = await admin.auth().createCustomToken('email-sender');
+    const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: customToken, returnSecureToken: true }) }
+    );
+    if (!res.ok) throw new HttpsError('internal', 'Failed to exchange custom token');
+    const { idToken } = await res.json();
+    return idToken;
+}
+
 async function _sendReportEmail(recipientEmail, xlsxBuffer, familyName) {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-
-    if (!smtpUser || !smtpPass) {
-        throw new HttpsError('failed-precondition', 'SMTP_USER/SMTP_PASS environment variables not configured');
-    }
-
-    const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPass },
-    });
+    const workerUrl = process.env.WORKER_URL;
+    if (!workerUrl) throw new HttpsError('failed-precondition', 'WORKER_URL not configured');
 
     const dateStr = new Date().toLocaleDateString('he-IL');
     const safeName = familyName || 'המשפחה שלנו';
-    await transporter.sendMail({
-        from: smtpUser,
-        to: recipientEmail,
-        subject: `דוח השקעות — ${safeName} — ${dateStr}`,
-        text: `שלום,\n\nמצורף דוח ההשקעות של ${safeName} לתאריך ${dateStr}.\n\nFamily Money`,
-        attachments: [{
-            filename: `investment-report-${dateStr.replace(/\./g, '-')}.xlsx`,
-            content: xlsxBuffer,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        }],
+    const idToken = await _getSystemIdToken();
+
+    const res = await fetch(`${workerUrl}/send-report-email`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+            to: recipientEmail,
+            familyName: safeName,
+            xlsxBase64: xlsxBuffer.toString('base64'),
+            dateStr,
+        }),
     });
+
+    if (!res.ok) {
+        const err = await res.text();
+        throw new HttpsError('internal', `Email delivery failed: ${err}`);
+    }
 }
 
 async function _buildAndSendReport(familyId, db) {
+    const familyRef = db.doc(`families/${familyId}`);
     const [familySnap, invSnap, priceSnap] = await Promise.all([
-        db.doc(`families/${familyId}`).get(),
+        familyRef.get(),
         db.collection(`families/${familyId}/investments`).get(),
         db.doc(`families/${familyId}/prices/latest`).get(),
     ]);
     if (!familySnap.exists) return;
     const familyData = familySnap.data();
+
+    // Resolve recipient: backup email or owner's auth email (familyId === managerUid)
+    let ownerEmail;
+    try {
+        const ownerUser = await admin.auth().getUser(familyId);
+        ownerEmail = ownerUser.email;
+    } catch (e) {
+        console.error(`[scheduledReport] Could not fetch owner email for family ${familyId}:`, e.message);
+    }
+    const recipient = familyData.backupReportEmail || ownerEmail;
+    if (!recipient) {
+        console.error(`[scheduledReport] No recipient email for family ${familyId}`);
+        return;
+    }
+
+    // Check and increment daily limit (10 emails/day)
+    const today = new Date().toISOString().slice(0, 10);
+    let allowed = false;
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(familyRef);
+        const data = snap.data() || {};
+        const dailyCount = data.emailDailyDate === today ? (data.emailDailyCount || 0) : 0;
+        if (dailyCount >= 10) return;
+        tx.update(familyRef, { emailDailyDate: today, emailDailyCount: dailyCount + 1 });
+        allowed = true;
+    });
+    if (!allowed) {
+        console.log(`[scheduledReport] Daily limit reached for family ${familyId}`);
+        return;
+    }
+
     const investments = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const exchangeRates = { ILS: 1, ...(priceSnap.exists ? priceSnap.data().exchangeRates || {} : {}) };
     const buffer = _generateExcel(familyData, investments, exchangeRates);
-    await _sendReportEmail(familyData.reportEmail, buffer, familyData.family_name);
+    await _sendReportEmail(recipient, buffer, familyData.family_name);
 }
 
 /**
  * exportInvestmentReport — callable by manager.
- * action='download': returns base64 Excel for client-side download.
- * action='email': sends Excel to the specified email address.
+ * Sends the Excel report to the owner's account email, or their backup email if set.
+ * Rate-limited to 10 emails per day per family.
  */
 exports.exportInvestmentReport = onCall(async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be authenticated');
 
-    const { action, email } = request.data;
     const db = admin.firestore();
 
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
@@ -147,29 +184,79 @@ exports.exportInvestmentReport = onCall(async (request) => {
         throw new HttpsError('permission-denied', 'Only managers can export reports');
     }
     const familyId = callerDoc.data().familyId;
+    const familyRef = db.doc(`families/${familyId}`);
 
     const [familySnap, invSnap, priceSnap] = await Promise.all([
-        db.doc(`families/${familyId}`).get(),
+        familyRef.get(),
         db.collection(`families/${familyId}/investments`).get(),
         db.doc(`families/${familyId}/prices/latest`).get(),
     ]);
 
     const familyData = familySnap.data() || {};
+
+    // Recipient must be owner's auth email or their saved backup email
+    const ownerEmail = request.auth.token.email;
+    const recipient = familyData.backupReportEmail || ownerEmail;
+    if (!recipient) throw new HttpsError('invalid-argument', 'לא נמצאה כתובת מייל');
+
+    // Atomically check and increment daily email count (limit: 10/day)
+    const today = new Date().toISOString().slice(0, 10);
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(familyRef);
+        const data = snap.data() || {};
+        const dailyCount = data.emailDailyDate === today ? (data.emailDailyCount || 0) : 0;
+        if (dailyCount >= 10) {
+            throw new HttpsError('resource-exhausted', 'הגעת למגבלת 10 מיילים ביום');
+        }
+        tx.update(familyRef, { emailDailyDate: today, emailDailyCount: dailyCount + 1 });
+    });
+
     const investments = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const exchangeRates = { ILS: 1, ...(priceSnap.exists ? priceSnap.data().exchangeRates || {} : {}) };
-
     const buffer = _generateExcel(familyData, investments, exchangeRates);
+    await _sendReportEmail(recipient, buffer, familyData.family_name);
+    return { success: true };
+});
 
-    if (action === 'email') {
-        const recipient = email || familyData.reportEmail;
-        if (!recipient) throw new HttpsError('invalid-argument', 'No recipient email provided');
-        await _sendReportEmail(recipient, buffer, familyData.family_name);
-        return { success: true };
+/**
+ * updateBackupReportEmail — callable by manager.
+ * Updates the family's backup report email. Can only be changed once per 24 hours.
+ * Pass empty string to clear the backup email.
+ */
+exports.updateBackupReportEmail = onCall(async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be authenticated');
+
+    const { email } = request.data;
+    if (typeof email !== 'string') {
+        throw new HttpsError('invalid-argument', 'email is required');
     }
 
-    // action === 'download'
-    const dateStr = new Date().toISOString().slice(0, 10);
-    return { success: true, data: buffer.toString('base64'), filename: `investment-report-${dateStr}.xlsx` };
+    const db = admin.firestore();
+    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== 'manager') {
+        throw new HttpsError('permission-denied', 'Only managers can update backup email');
+    }
+    const familyId = callerDoc.data().familyId;
+
+    const familyRef = db.doc(`families/${familyId}`);
+    const familySnap = await familyRef.get();
+    const familyData = familySnap.data() || {};
+
+    // Enforce once-per-24h limit
+    const changedAt = familyData.backupReportEmailChangedAt;
+    if (changedAt) {
+        const hoursSince = (Date.now() - new Date(changedAt).getTime()) / (1000 * 60 * 60);
+        if (hoursSince < 24) {
+            throw new HttpsError('resource-exhausted', 'ניתן לשנות מייל גיבוי פעם אחת ביום');
+        }
+    }
+
+    await familyRef.update({
+        backupReportEmail: email || null,
+        backupReportEmailChangedAt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    });
+    return { success: true };
 });
 
 /**

@@ -22,7 +22,7 @@ const TILE_COLORS = [
     { bg: '#FFFACD', border: '#F0D060', icon: '🌟' },
 ];
 
-export function render(container, investments, { familyId, sym = '₪', canEdit = false, canRename = false, canSell = false, onEdit, onSell } = {}) {
+export function render(container, investments, { familyId, sym = '₪', canEdit = false, canNote = false, canRename = false, canSell = false, onEdit, onSell } = {}) {
     if (!container) return;
 
     if (!investments || investments.length === 0) {
@@ -78,14 +78,14 @@ export function render(container, investments, { familyId, sym = '₪', canEdit 
 
     container.querySelectorAll('.heatmap-tile').forEach(tile => {
         const pos = positions[parseInt(tile.dataset.posIdx, 10)];
-        tile.addEventListener('click', () => showDetail(pos, { familyId, sym, canEdit, canRename, canSell, onEdit, onSell }));
+        tile.addEventListener('click', () => showDetail(pos, { familyId, sym, canEdit, canNote, canRename, canSell, onEdit, onSell }));
         tile.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showDetail(pos, { familyId, sym, canEdit, canRename, canSell, onEdit, onSell }); }
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showDetail(pos, { familyId, sym, canEdit, canNote, canRename, canSell, onEdit, onSell }); }
         });
     });
 }
 
-function showDetail(pos, { familyId, sym, canEdit, canRename, canSell, onEdit, onSell }) {
+function showDetail(pos, { familyId, sym, canEdit, canNote, canRename, canSell, onEdit, onSell }) {
     const name = pos.asset_name || pos.ticker || '—';
     const value = pos.currentValueILS ?? pos.totalInvested;
     const avgCostSym = currencySymbol(pos.currency);
@@ -102,7 +102,7 @@ function showDetail(pos, { familyId, sym, canEdit, canRename, canSell, onEdit, o
     const shares = pos.totalShares > 0
         ? pos.totalShares.toLocaleString('he-IL', { maximumFractionDigits: 2 }) : '—';
     const note = pos.note || '';
-    const noteReadonly = !canEdit || !pos.firstId;
+    const noteReadonly = !canNote || !pos.firstId;
     const canRenamePos = canRename && !!pos.firstId;
 
     openModal(`

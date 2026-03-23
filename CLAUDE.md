@@ -38,3 +38,4 @@ A Hebrew RTL family finance app for parents and kids to manage shared investment
 - Firebase SDK loaded from CDN (v10.14.1), not bundled
 - All UI text is in Hebrew
 - Uses Fredoka font for kid-friendly design
+- **Never suggest paid Firebase features** (Blaze plan, Secret Manager, etc.) — use free-tier alternatives only (e.g. `.env` files for config, Cloudflare secrets for sensitive values)
