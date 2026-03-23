@@ -17,6 +17,8 @@ let _exchangeRateAtPurchase = null;
 let _lastAutocompletedTicker = null;
 let _priceDateOffset = 0;       // day offset from purchase date for price lookup
 let _manualPriceMode = false;   // true when user selected the "ידני" price type
+let _currentKid = null;         // kid context for duplicate detection
+let _currentExisting = null;    // existing investment being edited
 
 export function showInvestmentModal(kid, existing) {
     const isEdit = !!existing;
@@ -31,6 +33,8 @@ export function showInvestmentModal(kid, existing) {
     _lastAutocompletedTicker = inv.ticker || null;
     _priceDateOffset = 0;
     _manualPriceMode = false;
+    _currentKid = kid;
+    _currentExisting = existing || null;
 
     const html = `
         <h2>${title}</h2>
@@ -42,6 +46,7 @@ export function showInvestmentModal(kid, existing) {
             </div>
             <div id="ticker-results" class="ticker-results" hidden></div>
         </div>
+        <div id="duplicate-warning" class="duplicate-warning" hidden></div>
         <div class="form-row">
             <div class="form-group">
                 <label for="inv-asset">${t.investment.assetLabel}</label>
@@ -229,6 +234,60 @@ export async function deleteInvestment(id) {
     }
 }
 
+// ─── Duplicate investment detection ──────────────────────────
+
+function checkForDuplicates(modal, ticker) {
+    const warnEl = modal.querySelector('#duplicate-warning');
+    if (!warnEl || !ticker || !_currentKid) { if (warnEl) warnEl.hidden = true; return; }
+
+    const investments = store.get('investments') || [];
+    const norm = ticker.trim().toUpperCase();
+    const dupes = investments.filter(inv =>
+        inv.kid === _currentKid &&
+        inv.ticker &&
+        inv.ticker.trim().toUpperCase() === norm &&
+        (!_currentExisting || inv.id !== _currentExisting.id)
+    );
+
+    if (dupes.length === 0) { warnEl.hidden = true; return; }
+
+    const family = store.get('family') || {};
+    const sym = family.currency_symbol || '₪';
+
+    const rows = dupes.map(inv => `
+        <tr>
+            <td>${esc(inv.purchase_date || '—')}</td>
+            <td>${esc(inv.asset_name || inv.ticker)}</td>
+            <td>${inv.amount_invested != null ? inv.amount_invested.toLocaleString('he-IL', { maximumFractionDigits: 0 }) + ' ' + sym : '—'}</td>
+            <td>${inv.shares != null ? inv.shares : '—'}</td>
+        </tr>
+    `).join('');
+
+    warnEl.hidden = false;
+    warnEl.innerHTML = `
+        <div class="duplicate-warning-title">⚠ ${t.investment.duplicateWarning(dupes.length)}</div>
+        <table class="duplicate-table">
+            <thead><tr>
+                <th>${t.investment.dupeDateCol}</th>
+                <th>${t.investment.dupeNameCol}</th>
+                <th>${t.investment.dupeAmountCol}</th>
+                <th>${t.investment.dupeSharesCol}</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <div class="duplicate-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="dupe-confirm">${t.investment.dupeConfirmBtn}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="dupe-cancel">${t.investment.dupeCancelBtn}</button>
+        </div>
+    `;
+    warnEl.querySelector('#dupe-confirm').addEventListener('click', () => { warnEl.hidden = true; });
+    warnEl.querySelector('#dupe-cancel').addEventListener('click', () => {
+        modal.querySelector('#inv-ticker').value = '';
+        modal.querySelector('#inv-asset').value = '';
+        warnEl.hidden = true;
+    });
+}
+
 // ─── Ticker autocomplete ──────────────────────────────────────
 
 function getHistoricTickers() {
@@ -372,6 +431,8 @@ async function selectResult(modal, symbol, name) {
         }
     } catch { /* ignore */ }
 
+    checkForDuplicates(modal, symbol);
+
     if (_tickerCurrency && _tickerCurrency !== 'ILS') {
         const { fetchExchangeRate } = await import('../../services/price-service.js');
         const rate = await fetchExchangeRate(_tickerCurrency);
@@ -403,6 +464,7 @@ async function detectTickerCurrency(modal, ticker) {
         } else {
             hideFxSection(modal);
         }
+        checkForDuplicates(modal, ticker);
     } catch { /* ignore */ }
 }
 

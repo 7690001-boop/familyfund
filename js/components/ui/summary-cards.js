@@ -7,17 +7,35 @@ import { formatCurrency, formatPct } from '../../utils/format.js';
 import { gainLossClass } from '../../utils/dom-helpers.js';
 import t from '../../i18n.js';
 
-// Coin metal palettes
-const COIN_METALS = [
-    { name: 'gold',     hi: '#fff8b0', face: '#FFD700', shadow: '#b8860b', edge: '#8a6508', emboss: '#fffadd' },
-    { name: 'silver',   hi: '#f8f8f8', face: '#d0d0d0', shadow: '#7a7a7a', edge: '#5a5a5a', emboss: '#ffffff' },
-    { name: 'copper',   hi: '#f8c898', face: '#CD7F32', shadow: '#8b4513', edge: '#603010', emboss: '#fce0c0' },
-    { name: 'rose',     hi: '#ffd0d0', face: '#e8a098', shadow: '#a05858', edge: '#704040', emboss: '#ffe8e4' },
-    { name: 'platinum', hi: '#eef2f5', face: '#c8d0d8', shadow: '#8898a0', edge: '#607078', emboss: '#f4f8fc' },
-    { name: 'bronze',   hi: '#f0d080', face: '#c49a3c', shadow: '#7a5c10', edge: '#504008', emboss: '#f8e0a0' },
-    { name: 'brass',    hi: '#f8e878', face: '#d4af37', shadow: '#8a7020', edge: '#5a4810', emboss: '#fcf0b0' },
-    { name: 'nickel',   hi: '#e0e4e8', face: '#b8c0c4', shadow: '#687078', edge: '#485058', emboss: '#eef0f4' },
-];
+// Coin metal palettes — mapped by security type for visual distinction
+const COIN_METALS = {
+    stock:   { hi: '#fffde0', face: '#FFD700', shadow: '#8a6000', edge: '#6a4400', emboss: '#fffff0' },  // gold — equities
+    etf:     { hi: '#e4f0ff', face: '#7aaed8', shadow: '#28608a', edge: '#0e4068', emboss: '#f0f8ff' },  // steel blue — baskets
+    fund:    { hi: '#ffefc0', face: '#c08028', shadow: '#783e08', edge: '#582c00', emboss: '#fff8e0' },  // dark bronze — mutual funds
+    bond:    { hi: '#eeeaff', face: '#9080c8', shadow: '#484080', edge: '#302858', emboss: '#f6f4ff' },  // violet silver — bonds
+    cash:    { hi: '#dcfce8', face: '#38b068', shadow: '#14663a', edge: '#085028', emboss: '#f0fff6' },  // emerald — cash
+    crypto:  { hi: '#fff0dc', face: '#e07818', shadow: '#884000', edge: '#6a2800', emboss: '#fff8ea' },  // orange — crypto
+    default: { hi: '#eeeff4', face: '#b0b8c8', shadow: '#58687a', edge: '#384858', emboss: '#f8f9fc' },  // neutral silver
+};
+
+// Detect which metal a given investment deserves
+function getSecurityMetal(inv) {
+    const ticker = (inv.ticker || '').toUpperCase().trim();
+    const type   = (inv.type || inv.asset_type || '').toLowerCase();
+    const name   = (inv.asset_name || inv.nickname || '').toLowerCase();
+
+    if (type === 'cash' || ticker === 'CASH' || name.includes('מזומן')) return COIN_METALS.cash;
+    if (type === 'bond' || name.includes('אג"ח') || name.includes('אגח') || name.includes('bond')) return COIN_METALS.bond;
+    if (type === 'crypto' || ticker.startsWith('BTC') || ticker.startsWith('ETH')) return COIN_METALS.crypto;
+    // Israeli mutual funds are 6–10 digit numeric codes
+    if (/^\d{5,}$/.test(ticker)) return COIN_METALS.fund;
+    // Well-known ETFs
+    const ETF_LIST = ['SPY','QQQ','VTI','IVV','VOO','VEA','VWO','GLD','SLV','TLT','AGG',
+                      'ARKK','XLK','XLF','EEM','IEMG','ACWI','CSPX','IWDA','EIMI'];
+    if (ETF_LIST.includes(ticker) || type === 'etf') return COIN_METALS.etf;
+    if (type === 'stock' || type === 'equity') return COIN_METALS.stock;
+    return COIN_METALS.stock; // default: gold for any equity-like holding
+}
 
 // How many shekels each coin represents
 const SHEKELS_PER_COIN = 10;
@@ -102,11 +120,11 @@ function buildCoins(investments, totalInvested) {
     if (!investments || investments.length === 0 || totalInvested <= 0) return '';
 
     const sorted = [...investments]
-        .map((inv, i) => ({
+        .map((inv) => ({
             name: inv.nickname || inv.asset_name || inv.ticker || '',
             amount: inv.amountInvested || 0,
             pct: (inv.amountInvested || 0) / totalInvested,
-            metal: COIN_METALS[i % COIN_METALS.length],
+            metal: getSecurityMetal(inv),
         }))
         .filter(c => c.pct > 0)
         .sort((a, b) => b.pct - a.pct);
@@ -118,9 +136,9 @@ function buildCoins(investments, totalInvested) {
     for (const inv of sorted) {
         const count = Math.max(1, Math.round(inv.amount / SHEKELS_PER_COIN));
         for (let c = 0; c < count; c++) {
-            const baseSize = 28 + (inv.pct * 14);
+            const baseSize = 32 + (inv.pct * 20);
             const jitter = (rng() - 0.5) * 8;
-            const size = Math.max(24, Math.min(38, Math.round(baseSize + jitter)));
+            const size = Math.max(26, Math.min(48, Math.round(baseSize + jitter)));
             allCoins.push({ name: inv.name, pct: inv.pct, metal: inv.metal, size });
         }
     }
@@ -147,7 +165,7 @@ function buildCoins(investments, totalInvested) {
 
     // Render coins as absolutely positioned elements
     const coinHtml = placed.map((coin, idx) => {
-        const thickness = Math.max(5, Math.round(coin.size * 0.28));
+        const thickness = Math.max(7, Math.round(coin.size * 0.42));
         const m = coin.metal;
         const fontSize = Math.max(6, Math.min(10, Math.round(coin.size * 0.19)));
         const label = coin.name.length > 4 ? coin.name.slice(0, 3) + '…' : coin.name;
@@ -169,7 +187,7 @@ function buildCoins(investments, totalInvested) {
             animation-delay:${delay}s;
             --coin-rotate:${coin.rotate}deg;
             z-index:${zIdx};
-            transform: rotateX(28deg) rotate(${coin.rotate}deg);
+            transform: rotateX(42deg) rotate(${coin.rotate}deg);
         " title="${coin.name} (${Math.round(coin.pct * 100)}%)">
             <span class="coin-face">
                 <span class="coin-label">${label}</span>

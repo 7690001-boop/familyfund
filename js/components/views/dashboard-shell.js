@@ -9,9 +9,11 @@ import { can } from '../../permissions.js';
 import { esc } from '../../utils/dom-helpers.js';
 import * as familyService from '../../services/family-service.js';
 import * as investmentService from '../../services/investment-service.js';
+import * as investmentRequestService from '../../services/investment-request-service.js';
 import * as goalService from '../../services/goal-service.js';
 import * as simulationService from '../../services/simulation-service.js';
 import * as priceService from '../../services/price-service.js';
+import * as announcementService from '../../services/family-announcement-service.js';
 import { showAddMemberModal, showManageMembersModal, showRenameMemberModal } from '../modals/member-modals.js';
 import { showKidContextMenu } from '../modals/kid-modals.js';
 import { showSettingsModal } from '../modals/settings-modal.js';
@@ -26,7 +28,9 @@ let _unsubs = [];
 let _activeTab = null;
 let _kidViewMod = null;
 let _familyViewMod = null;
+let _schoolViewMod = null;
 let _chatPanelMod = null;
+let _tickerMod = null;
 let _renderTimer = null;
 
 function debouncedRenderShell() {
@@ -45,9 +49,23 @@ export async function mount(container) {
     await investmentService.listen(user.familyId);
     await goalService.listen(user.familyId);
     await simulationService.listen(user.familyId);
+    await investmentRequestService.listen(user.familyId);
+
+    await announcementService.listen(user.familyId);
 
     await priceService.loadPriceCache(user.familyId);
     priceService.startAutoRefresh();
+
+    // Mount market ticker bar (above the app, in index.html)
+    if (!_tickerMod) {
+        const tickerContainer = document.getElementById('market-ticker-bar');
+        if (tickerContainer) {
+            import('../ui/market-ticker.js').then(m => {
+                _tickerMod = m;
+                m.mount(tickerContainer);
+            }).catch(() => {});
+        }
+    }
 
     renderShell();
 
@@ -56,6 +74,7 @@ export async function mount(container) {
     let _lastChatDisabled = store.get('family')?.chatDisabled ?? false;
 
     _unsubs.push(
+        store.subscribe('familyAnnouncements', () => debouncedRenderShell()),
         store.subscribe('kids', () => debouncedRenderShell()),
         store.subscribe('family', (f) => {
             updateTitle();
@@ -66,6 +85,7 @@ export async function mount(container) {
             }
         }),
         store.subscribe('members', () => updateTabAvatars()),
+        store.subscribe('investmentRequests', () => updateRequestBadges()),
         store.subscribe('priceLastUpdate', () => updatePriceStatus()),
         store.subscribe('user', (u) => {
             // Only re-render the shell when impersonation changes (role/kidName),
@@ -85,9 +105,13 @@ export function unmount() {
     _unsubs = [];
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
     if (_familyViewMod) { _familyViewMod.unmount(); _familyViewMod = null; }
+    if (_schoolViewMod) { _schoolViewMod.unmount(); _schoolViewMod = null; }
     if (_chatPanelMod) { _chatPanelMod.unmount(); _chatPanelMod = null; }
+    if (_tickerMod) { _tickerMod.unmount(); _tickerMod = null; }
+    announcementService.stopListening();
     familyService.stopListening();
     investmentService.stopListening();
+    investmentRequestService.stopListening();
     goalService.stopListening();
     simulationService.stopListening();
     priceService.stopAutoRefresh();
@@ -144,6 +168,10 @@ function renderShell() {
             headerActions += `<button id="export-btn" class="btn btn-icon" title="${t.dashboard.exportTitle}">${t.dashboard.exportData}</button>`;
             headerActions += `<button id="import-btn" class="btn btn-icon" title="${t.dashboard.importTitle}">${t.dashboard.importData}</button>`;
         }
+        if (can(effectiveUser, 'family:edit')) {
+            headerActions += `<button id="announcements-btn" class="btn btn-small" title="${t.announcements.manageBtn}">${t.announcements.manageBtn}</button>`;
+            headerActions += `<button id="refresh-prices-btn" class="btn btn-icon" title="עדכן מחירים">↻</button>`;
+        }
     }
     if (can(effectiveUser, 'feedback:send')) headerActions += `<button id="feedback-btn" class="btn btn-small" title="${t.feedback.title}">${t.dashboard.feedback}</button>`;
     headerActions += `<button id="logout-btn" class="btn btn-icon" title="${t.setup.logout}">${t.dashboard.logout}</button>`;
@@ -196,6 +224,8 @@ function renderShell() {
             const familyActive = _activeTab === '__family__' ? ' active' : '';
             tabsHtml += `<button class="tab-btn tab-btn-family${familyActive}" data-kid="__family__">🏠 ${t.dashboard.familyTab}</button>`;
         }
+        const schoolActive = _activeTab === '__school__' ? ' active' : '';
+        tabsHtml += `<button class="tab-btn tab-btn-school${schoolActive}" data-kid="__school__">${t.school.tab}</button>`;
     } else {
         headerHtml = `
         <header class="app-header">
@@ -205,21 +235,48 @@ function renderShell() {
             </div>
         </header>`;
 
+        const pendingRequests = store.get('investmentRequests') || [];
         visibleKids.forEach(kid => {
             const active = _activeTab === kid ? ' active' : '';
             const member = members.find(m => m.name === kid);
             const avatarCfg = member?.avatar || DEFAULT_AVATAR;
             const avatarSvg = renderAvatar(avatarCfg, 36);
-            tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}</button>`;
+            const pendingCount = user.role === 'manager'
+                ? pendingRequests.filter(r => r.kid === kid && r.status === 'pending').length
+                : 0;
+            const badge = pendingCount > 0
+                ? `<span class="tab-request-badge">${pendingCount}</span>`
+                : '';
+            tabsHtml += `<button class="tab-btn${active}" data-kid="${esc(kid)}"><span class="tab-avatar">${avatarSvg}</span>${esc(kid)}${badge}</button>`;
         });
         if (visibleKids.length > 1) {
             const active = _activeTab === '__family__' ? ' active' : '';
             tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">${t.dashboard.familyTab}</button>`;
         }
+        const schoolActive = _activeTab === '__school__' ? ' active' : '';
+        tabsHtml += `<button class="tab-btn tab-btn-school${schoolActive}" data-kid="__school__">${t.school.tab}</button>`;
+    }
+
+    // Build announcement banner
+    const announcements = store.get('familyAnnouncements') || [];
+    const dismissed = JSON.parse(sessionStorage.getItem('dismissedAnnouncements') || '[]');
+    const visibleAnnouncements = announcements.filter(a => !dismissed.includes(a.id));
+    let announcementBarHtml = '';
+    if (visibleAnnouncements.length > 0) {
+        const items = visibleAnnouncements.map(a => `
+            <div class="announcement-item" data-id="${esc(a.id)}">
+                ${a.title ? `<strong class="announcement-title">${esc(a.title)}</strong> ` : ''}
+                <span class="announcement-text">${esc(a.text)}</span>
+                ${can(effectiveUser, 'family:edit') ? `<button class="announcement-edit btn btn-ghost btn-xs" data-id="${esc(a.id)}" title="${t.common.edit}">✏️</button>` : ''}
+                <button class="announcement-dismiss btn btn-ghost btn-xs" data-id="${esc(a.id)}" title="${t.announcements.dismiss}">${t.announcements.dismiss}</button>
+            </div>
+        `).join('');
+        announcementBarHtml = `<div class="family-announcement-bar">${items}</div>`;
     }
 
     _container.innerHTML = `
         ${headerHtml}
+        ${announcementBarHtml}
         <nav class="tabs-nav${isKidMode ? ' kid-mode-tabs' : ''}" id="dashboard-tabs">${tabsHtml}</nav>
         <div class="dashboard-layout">
             ${!family.chatDisabled ? '<aside class="chat-panel-container" id="chat-panel-container"></aside>' : ''}
@@ -245,7 +302,11 @@ function renderShell() {
         mountChatPanel(chatContainer);
     }
 
-    if (visibleKids.length > 0 && (!_activeTab || !visibleKids.includes(_activeTab))) {
+    if (_activeTab === '__school__') {
+        switchTab('__school__');
+    } else if (!_activeTab && user.role === 'manager') {
+        switchTab('__school__');
+    } else if (visibleKids.length > 0 && (!_activeTab || !visibleKids.includes(_activeTab))) {
         switchTab(visibleKids[0]);
     } else if (_activeTab === '__family__') {
         switchTab('__family__');
@@ -351,6 +412,48 @@ function wireShellEvents() {
         });
     }
 
+    const announcementsBtn = _container.querySelector('#announcements-btn');
+    if (announcementsBtn) {
+        announcementsBtn.addEventListener('click', async () => {
+            const { showAnnouncementModal } = await import('../modals/family-announcement-modal.js');
+            showAnnouncementModal();
+        });
+    }
+
+    _container.querySelectorAll('.announcement-dismiss').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const dismissed = JSON.parse(sessionStorage.getItem('dismissedAnnouncements') || '[]');
+            dismissed.push(id);
+            sessionStorage.setItem('dismissedAnnouncements', JSON.stringify(dismissed));
+            btn.closest('.announcement-item').remove();
+            const bar = _container.querySelector('.family-announcement-bar');
+            if (bar && bar.querySelectorAll('.announcement-item').length === 0) bar.remove();
+        });
+    });
+
+    _container.querySelectorAll('.announcement-edit').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const announcements = store.get('familyAnnouncements') || [];
+            const item = announcements.find(a => a.id === id);
+            const { showAnnouncementModal } = await import('../modals/family-announcement-modal.js');
+            showAnnouncementModal(item);
+        });
+    });
+
+    const refreshPricesBtn = _container.querySelector('#refresh-prices-btn');
+    if (refreshPricesBtn) {
+        refreshPricesBtn.addEventListener('click', async () => {
+            refreshPricesBtn.disabled = true;
+            try {
+                await priceService.fetchPrices(false);
+            } finally {
+                refreshPricesBtn.disabled = false;
+            }
+        });
+    }
+
     const feedbackBtn = _container.querySelector('#feedback-btn');
     if (feedbackBtn) {
         feedbackBtn.addEventListener('click', async () => {
@@ -405,10 +508,14 @@ async function switchTab(tabId) {
 
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
     if (_familyViewMod) { _familyViewMod.unmount(); _familyViewMod = null; }
+    if (_schoolViewMod) { _schoolViewMod.unmount(); _schoolViewMod = null; }
 
     if (tabId === '__family__') {
         _familyViewMod = await import('./family-view.js');
         _familyViewMod.mount(viewContainer);
+    } else if (tabId === '__school__') {
+        _schoolViewMod = await import('./school-view.js');
+        _schoolViewMod.mount(viewContainer);
     } else {
         _kidViewMod = await import('./kid-view.js');
         _kidViewMod.mount(viewContainer, tabId);
@@ -432,6 +539,29 @@ function updateTitle() {
         titleEl.textContent = title;
         document.title = title;
     }
+}
+
+function updateRequestBadges() {
+    if (!_container) return;
+    const user = store.get('user');
+    if (user?.role !== 'manager') return;
+    const pendingRequests = store.get('investmentRequests') || [];
+    _container.querySelectorAll('.tab-btn[data-kid]').forEach(btn => {
+        const kidName = btn.dataset.kid;
+        if (kidName === '__family__') return;
+        const count = pendingRequests.filter(r => r.kid === kidName && r.status === 'pending').length;
+        let badge = btn.querySelector('.tab-request-badge');
+        if (count > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'tab-request-badge';
+                btn.appendChild(badge);
+            }
+            badge.textContent = count;
+        } else if (badge) {
+            badge.remove();
+        }
+    });
 }
 
 function updateTabAvatars() {

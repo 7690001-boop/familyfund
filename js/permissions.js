@@ -21,10 +21,14 @@ const RULES = {
     'kid:delete':            (user) => user.role === 'manager',
     'kid:rename':            (user) => user.role === 'manager',
 
-    // Investments — manager only, except toggle-hidden which kids can do for their own
+    // Investments — manager only, except toggle-hidden and rename which kids can do for their own
     'investment:create':     (user) => user.role === 'manager',
     'investment:edit':       (user) => user.role === 'manager',
     'investment:delete':     (user) => user.role === 'manager',
+    'investment:rename':     (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
     'investment:toggle-hidden': (user, ctx) => {
         if (user.role === 'manager') return true;
         return user.role === 'member' && user.kidName === ctx?.kidName;
@@ -78,8 +82,26 @@ const RULES = {
     // Prices
     'prices:refresh':        (user) => user.role === 'manager',
 
+    // Investment requests — kids can submit; managers can approve/reject
+    'investment-request:create': (user, ctx) => {
+        if (user.role === 'member') return user.kidName === ctx?.kidName;
+        return false;
+    },
+    'investment-request:manage': (user) => user.role === 'manager',
+    'investment-request:view':   (user, ctx) => {
+        if (user.role === 'manager') return true;
+        return user.role === 'member' && user.kidName === ctx?.kidName;
+    },
+
     // Family overview — both roles
     'family-view:access':    () => true,
+
+    // Finance school — all family members can view and comment; only managers add/delete topics
+    'school:access':         (user) => user.role === 'manager' || user.role === 'member',
+    'school:add-topic':      (user) => user.role === 'manager',
+    'school:delete-topic':   (user) => user.role === 'manager',
+    'school:comment':        (user) => user.role === 'manager' || user.role === 'member',
+    'school:delete-comment': (user) => user.role === 'manager',
 };
 
 export function can(user, action, context) {

@@ -167,6 +167,10 @@ export function aggregateByTicker(investments) {
             gainLossILS,
             gainLossPctILS,
             exchangeRate,
+            firstId: first.id,
+            note: first.note || '',
+            nickname: first.nickname || '',
+            baseAssetName: first.asset_name || first.ticker || '',
         };
     });
 }

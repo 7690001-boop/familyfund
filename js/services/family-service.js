@@ -90,7 +90,37 @@ export async function updateMember(familyId, memberUid, updates) {
 }
 
 export async function togglePrivacy(familyId, memberUid, isPrivate) {
-    await updateMember(familyId, memberUid, { private: isPrivate });
+    const { getFunctions, httpsCallable } = await import(`${FIREBASE_CDN}/firebase-functions.js`);
+    const { getApp } = await import('../firebase-init.js');
+    const functions = getFunctions(getApp());
+    const fn = httpsCallable(functions, 'toggleMemberPrivacy');
+    const result = await fn({ familyId, memberUid, isPrivate });
+    return result.data;
+}
+
+export async function clearPrivacyCooldown(familyId, memberUid) {
+    const { getFunctions, httpsCallable } = await import(`${FIREBASE_CDN}/firebase-functions.js`);
+    const { getApp } = await import('../firebase-init.js');
+    const functions = getFunctions(getApp());
+    const fn = httpsCallable(functions, 'clearPrivacyCooldown');
+    await fn({ familyId, memberUid });
+}
+
+/** Check if a member is currently in privacy cooldown */
+export function isInCooldown(member) {
+    if (!member?.privacyCooldownUntil) return false;
+    return new Date(member.privacyCooldownUntil) > new Date();
+}
+
+/** Get remaining cooldown time as a human-readable Hebrew string */
+export function getCooldownRemaining(member) {
+    if (!member?.privacyCooldownUntil) return null;
+    const remaining = new Date(member.privacyCooldownUntil) - new Date();
+    if (remaining <= 0) return null;
+    const hours = Math.floor(remaining / (1000 * 60 * 60));
+    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) return `${hours} שעות ו-${minutes} דקות`;
+    return `${minutes} דקות`;
 }
 
 export async function removeMember(familyId, memberUid) {

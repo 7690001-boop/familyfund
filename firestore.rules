@@ -49,18 +49,18 @@ service cloud.firestore {
         allow write: if request.auth != null && isManager(familyId);
         // Allow initial write when creating family (manager adds themselves as first member)
         allow create: if request.auth != null && request.auth.uid == memberId;
-        // Members can update their own avatar and privacy setting
+        // Members can update their own avatar (privacy is toggled via Cloud Function)
         allow update: if request.auth != null && request.auth.uid == memberId
                       && isFamilyMember(familyId)
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'jarType', 'private', 'name', 'updated_at']);
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'jarType', 'name', 'updated_at']);
       }
 
-      // Investments subcollection -- only manager can write; members can toggle hidden on their own kid's investments
+      // Investments subcollection -- only manager can write; members can toggle hidden or rename their own kid's investments
       match /investments/{investmentId} {
         allow read: if request.auth != null && (isFamilyMember(familyId) || isSystemAdmin());
         allow create, update, delete: if request.auth != null && isManager(familyId);
         allow update: if request.auth != null && isFamilyMember(familyId)
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hidden'])
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hidden', 'nickname', 'updated_at'])
                       && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.name == resource.data.kid;
       }
 
@@ -87,9 +87,59 @@ service cloud.firestore {
                               && resource.data.kid_uid == request.auth.uid;
       }
 
+      // Investment requests -- kids can create their own; all members can read; managers can update/delete
+      match /investmentRequests/{requestId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        // Kids create requests for themselves
+        allow create: if request.auth != null && isFamilyMember(familyId)
+                      && request.resource.data.kid_uid == request.auth.uid
+                      && request.resource.data.status == 'pending';
+        // Kids can delete their own resolved requests
+        allow delete: if request.auth != null && isFamilyMember(familyId)
+                      && resource.data.kid_uid == request.auth.uid
+                      && resource.data.status != 'pending';
+        // Managers can approve/reject (update status) or delete any
+        allow update, delete: if request.auth != null && isManager(familyId);
+      }
+
       // Prices cache -- any member can read/write
       match /prices/{doc} {
         allow read, write: if request.auth != null && isFamilyMember(familyId);
+      }
+
+      // Finance school topics -- all members can read and create; only managers can delete
+      match /schoolTopics/{topicId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create: if request.auth != null && isFamilyMember(familyId);
+        allow update: if request.auth != null && isFamilyMember(familyId);
+        allow delete: if request.auth != null && isManager(familyId);
+
+        // Comments -- any family member can read/create; managers can delete any; members delete own
+        match /comments/{commentId} {
+          allow read: if request.auth != null && isFamilyMember(familyId);
+          allow create: if request.auth != null && isFamilyMember(familyId);
+          allow delete: if request.auth != null && (isManager(familyId) || resource.data.author_uid == request.auth.uid);
+        }
+
+        // Questions -- any family member can read/create/update; only managers can delete
+        match /questions/{questionId} {
+          allow read: if request.auth != null && isFamilyMember(familyId);
+          allow create: if request.auth != null && isFamilyMember(familyId);
+          allow update: if request.auth != null && isFamilyMember(familyId);
+          allow delete: if request.auth != null && isManager(familyId);
+        }
+      }
+
+      // Family announcements -- manager writes; all members read
+      match /announcements/{announcementId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create, update, delete: if request.auth != null && isManager(familyId);
+      }
+
+      // Bills -- manager writes; all members read
+      match /bills/{billId} {
+        allow read: if request.auth != null && isFamilyMember(familyId);
+        allow create, update, delete: if request.auth != null && isManager(familyId);
       }
 
       // Chat topics -- any family member can read/create, only manager or author can delete

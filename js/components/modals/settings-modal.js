@@ -33,6 +33,10 @@ export function showSettingsModal() {
             <input type="text" id="cfg-sp500" dir="ltr" placeholder="${t.settings.sp500Placeholder}" value="${esc(family.sp500_ticker || '')}">
             <div class="form-hint">${t.settings.sp500Hint}</div>
         </div>
+        <div class="form-group">
+            <label for="cfg-monthly-income">${t.settings.monthlyIncomeLabel}</label>
+            <input type="number" id="cfg-monthly-income" min="0" step="any" placeholder="${t.settings.monthlyIncomePlaceholder}" value="${family.monthly_income || ''}">
+        </div>
         <div class="form-group settings-toggle-row">
             <label class="settings-toggle-label">
                 <input type="checkbox" id="cfg-chat-enabled" ${family.chatDisabled ? '' : 'checked'}>
@@ -52,12 +56,14 @@ export function showSettingsModal() {
     modal.querySelector('#modal-save').addEventListener('click', async () => {
         try {
             const user = store.get('user');
+            const incomeVal = modal.querySelector('#cfg-monthly-income').value;
             await familyService.updateFamily(user.familyId, {
                 family_name: modal.querySelector('#cfg-family').value.trim(),
                 currency_symbol: modal.querySelector('#cfg-currency').value.trim() || '₪',
                 matching_days: parseInt(modal.querySelector('#cfg-matching-days').value) || 365,
                 sp500_ticker: modal.querySelector('#cfg-sp500').value.trim(),
                 chatDisabled: !modal.querySelector('#cfg-chat-enabled').checked,
+                monthly_income: incomeVal ? parseFloat(incomeVal) : 0,
             });
             closeModal();
             emit('toast', { message: t.settings.savedToast, type: 'success' });

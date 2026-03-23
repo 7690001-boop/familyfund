@@ -43,7 +43,11 @@ function sortInvestments(investments, sortKey, sortDir) {
 }
 
 export function render(container, investments, options = {}) {
-    const { canEdit = false, canAdd = false, showHiddenBadge = false, canToggleHidden = false, onAdd, onEdit, onDelete, onToggleHidden } = options;
+    const { canEdit = false, canAdd = false, showHiddenBadge = false, canToggleHidden = false,
+            canRequestBuy = false, canRequestSell = false, canSell = false,
+            canAddCash = false, canConvert = false,
+            onAdd, onEdit, onDelete, onToggleHidden, onRequestBuy, onRequestSell,
+            onSell, onAddCash, onConvert } = options;
     const family = store.get('family') || {};
     const ilsSym = family.currency_symbol || '₪';
 
@@ -54,24 +58,41 @@ export function render(container, investments, options = {}) {
         container.innerHTML = `
             <div class="section-header">
                 <h2>${t.assets.title}</h2>
-                ${canAdd ? `<div class="section-actions"><button class="btn btn-small btn-primary add-inv-btn">${t.assets.addBtn}</button></div>` : ''}
+                <div class="section-actions">
+                    ${canConvert ? `<button class="btn btn-small btn-secondary convert-btn">${t.cash.convertCurrencyBtn}</button>` : ''}
+                    ${canAddCash ? `<button class="btn btn-small btn-secondary add-cash-btn">${t.cash.addCashBtn}</button>` : ''}
+                    ${canRequestBuy ? `<button class="btn btn-small btn-primary req-buy-btn">${t.investmentRequest.requestBuyBtn}</button>` : ''}
+                    ${canAdd ? `<button class="btn btn-small btn-primary add-inv-btn">${t.assets.addBtn}</button>` : ''}
+                </div>
             </div>
             <div class="empty-state">
                 <p>${t.assets.empty}</p>
                 ${canAdd ? `<button class="btn btn-small btn-primary add-first-inv-btn">${t.assets.addFirst}</button>` : ''}
             </div>
         `;
-        if (canAdd) {
+        if (canAdd && onAdd) {
             const addBtn = container.querySelector('.add-inv-btn');
             const addFirstBtn = container.querySelector('.add-first-inv-btn');
-            if (addBtn && onAdd) addBtn.addEventListener('click', onAdd);
-            if (addFirstBtn && onAdd) addFirstBtn.addEventListener('click', onAdd);
+            if (addBtn) addBtn.addEventListener('click', onAdd);
+            if (addFirstBtn) addFirstBtn.addEventListener('click', onAdd);
+        }
+        if (canAddCash && onAddCash) {
+            const addCashBtn = container.querySelector('.add-cash-btn');
+            if (addCashBtn) addCashBtn.addEventListener('click', onAddCash);
+        }
+        if (canConvert && onConvert) {
+            const convertBtn = container.querySelector('.convert-btn');
+            if (convertBtn) convertBtn.addEventListener('click', onConvert);
+        }
+        if (canRequestBuy && onRequestBuy) {
+            const reqBuyBtn = container.querySelector('.req-buy-btn');
+            if (reqBuyBtn) reqBuyBtn.addEventListener('click', onRequestBuy);
         }
         return;
     }
 
     let actionsHeader = '';
-    if (canEdit || canToggleHidden) actionsHeader = `<th>${t.assets.headerActions}</th>`;
+    if (canEdit || canToggleHidden || canRequestSell || canSell) actionsHeader = `<th>${t.assets.headerActions}</th>`;
 
     // Keep original for re-sort; work with sorted copy
     const originalInvestments = investments;
@@ -93,11 +114,11 @@ export function render(container, investments, options = {}) {
             const glClass = cellGainLossClass(pos.gainLossILS);
 
             const avgCell = pos.avgCostNative != null
-                ? `<span dir="ltr">${nativeSym}${pos.avgCostNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`
+                ? `<span dir="ltr">${nativeSym}${pos.avgCostNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
                 : '—';
 
             const priceCell = pos.currentPrice != null
-                ? `<span dir="ltr">${nativeSym}${pos.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`
+                ? `<span dir="ltr">${nativeSym}${pos.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
                 : '—';
 
             let valueCell = '—';
@@ -133,7 +154,7 @@ export function render(container, investments, options = {}) {
             posRows += `<tr${pos.someHidden ? ' class="asset-row-hidden"' : ''}>
                 <td>${nameCell}</td>
                 ${posFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
-                <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—'}</td>
+                <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td>
                 <td class="cell-number">${investedCell}</td>
                 <td class="cell-number">${avgCell}</td>
                 <td class="cell-number">${priceCell}</td>
@@ -175,21 +196,30 @@ export function render(container, investments, options = {}) {
         // Color based on ILS gain/loss (home currency perspective)
         const glClass = cellGainLossClass(inv.gainLossILS);
 
+        const isCash = inv.type === 'cash';
         let actionsCol = '';
-        if (canEdit || canToggleHidden) {
+        if (canEdit || canToggleHidden || canRequestSell || canSell) {
             const hideBtn = canToggleHidden
                 ? `<button class="btn btn-ghost toggle-hidden-btn" data-id="${esc(inv.id)}" data-hidden="${!!inv.hidden}" title="${inv.hidden ? 'הצג במבט המשפחה' : 'הסתר ממבט המשפחה'}">${inv.hidden ? '👁' : '🙈'}</button>`
                 : '';
             const editDeleteBtns = canEdit
-                ? `<button class="btn btn-ghost edit-inv-btn" data-id="${esc(inv.id)}" title="${t.common.edit}">✎</button>
+                ? `<button class="btn btn-ghost edit-inv-btn" data-id="${esc(inv.id)}" title="${t.common.edit}"${isCash ? ' style="display:none"' : ''}>✎</button>
                 <button class="btn btn-ghost danger del-inv-btn" data-id="${esc(inv.id)}" title="${t.common.delete}">✕</button>`
                 : '';
-            actionsCol = `<td class="cell-actions">${hideBtn}${editDeleteBtns}</td>`;
+            // Sell button only for non-cash securities
+            const sellBtn = canSell && !isCash
+                ? `<button class="btn btn-ghost sell-inv-btn" data-id="${esc(inv.id)}" title="${t.cash.sellTitle}" style="font-size:0.78rem">📉</button>`
+                : '';
+            // Sell-request button only for non-cash securities (member role)
+            const reqSellBtn = canRequestSell && !isCash
+                ? `<button class="btn btn-ghost req-sell-btn" data-id="${esc(inv.id)}" title="${t.investmentRequest.requestSellBtn}" style="font-size:0.78rem">📤</button>`
+                : '';
+            actionsCol = `<td class="cell-actions">${hideBtn}${reqSellBtn}${sellBtn}${editDeleteBtns}</td>`;
         }
 
         // Current price cell — always in native currency
         const priceCell = inv.currentPrice != null
-            ? `<span dir="ltr">${nativeSym}${inv.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`
+            ? `<span dir="ltr">${nativeSym}${inv.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
             : '—';
 
         // Current value cell — native, and ILS sub-line if FX
@@ -224,12 +254,14 @@ export function render(container, investments, options = {}) {
 
         const hiddenBadgeHtml = showHiddenBadge && inv.hidden
             ? `<span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
+        const cashBadgeHtml = isCash
+            ? `<span class="cash-type-badge">💵 ${t.cash.cashLabel}</span>` : '';
         const sharesFormatted = typeof inv.shares === 'number'
-            ? inv.shares.toLocaleString('en-US', { maximumFractionDigits: 4 })
+            ? inv.shares.toLocaleString('en-US', { maximumFractionDigits: 2 })
             : (inv.shares || '—');
         const nameCell = inv.nickname
-            ? `<span class="cell-line-main">${esc(inv.nickname)}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`
-            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${hiddenBadgeHtml}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`;
+            ? `<span class="cell-line-main">${esc(inv.nickname)}${cashBadgeHtml}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`
+            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${cashBadgeHtml}${hiddenBadgeHtml}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`;
 
         rows += `<tr${inv.hidden ? ' class="asset-row-hidden"' : ''}>
             <td>${nameCell}</td>
@@ -264,6 +296,9 @@ export function render(container, investments, options = {}) {
             <h2>${t.assets.title}</h2>
             <div class="section-actions">
                 <button class="btn btn-small btn-secondary fetch-prices-btn">${t.assets.updatePrices}</button>
+                ${canConvert ? `<button class="btn btn-small btn-secondary convert-btn">${t.cash.convertCurrencyBtn}</button>` : ''}
+                ${canAddCash ? `<button class="btn btn-small btn-secondary add-cash-btn">${t.cash.addCashBtn}</button>` : ''}
+                ${canRequestBuy ? `<button class="btn btn-small btn-primary req-buy-btn">${t.investmentRequest.requestBuyBtn}</button>` : ''}
                 ${canAdd ? `<button class="btn btn-small btn-primary add-inv-btn">${t.assets.addBtn}</button>` : ''}
             </div>
         </div>
@@ -292,6 +327,11 @@ export function render(container, investments, options = {}) {
     `;
 
     // Wire events
+    if (canRequestBuy && onRequestBuy) {
+        const reqBuyBtn = container.querySelector('.req-buy-btn');
+        if (reqBuyBtn) reqBuyBtn.addEventListener('click', onRequestBuy);
+    }
+
     if (canAdd && onAdd) {
         const addBtn = container.querySelector('.add-inv-btn');
         if (addBtn) addBtn.addEventListener('click', onAdd);
@@ -313,6 +353,28 @@ export function render(container, investments, options = {}) {
         container.querySelectorAll('.toggle-hidden-btn').forEach(btn => {
             btn.addEventListener('click', () => onToggleHidden(btn.dataset.id, btn.dataset.hidden !== 'true'));
         });
+    }
+
+    if (canRequestSell && onRequestSell) {
+        container.querySelectorAll('.req-sell-btn').forEach(btn => {
+            btn.addEventListener('click', () => onRequestSell(btn.dataset.id));
+        });
+    }
+
+    if (canSell && onSell) {
+        container.querySelectorAll('.sell-inv-btn').forEach(btn => {
+            btn.addEventListener('click', () => onSell(btn.dataset.id));
+        });
+    }
+
+    if (canAddCash && onAddCash) {
+        const addCashBtn = container.querySelector('.add-cash-btn');
+        if (addCashBtn) addCashBtn.addEventListener('click', onAddCash);
+    }
+
+    if (canConvert && onConvert) {
+        const convertBtn = container.querySelector('.convert-btn');
+        if (convertBtn) convertBtn.addEventListener('click', onConvert);
     }
 
     const fetchBtn = container.querySelector('.fetch-prices-btn');
