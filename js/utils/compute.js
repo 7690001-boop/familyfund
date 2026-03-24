@@ -175,6 +175,42 @@ export function aggregateByTicker(investments) {
     });
 }
 
+// Default tickers eligible for long-term holding rewards
+const DEFAULT_REWARD_TICKERS = ['VOO', 'SPY', 'CSPX', 'IWDA', 'VWRA', 'VT', 'EIMI'];
+
+// Milestone thresholds in days
+const MILESTONES = [
+    { days: 730, level: 'oak',     icon: '🌳', label: '2y' },
+    { days: 365, level: 'tree',    icon: '🌲', label: '1y' },
+    { days: 180, level: 'sapling', icon: '🌿', label: '6m' },
+    { days: 90,  level: 'sprout',  icon: '🌱', label: '3m' },
+    { days: 30,  level: 'seed',    icon: '🫘', label: '1m' },
+];
+
+export function getRewardMilestone(inv, familyConfig) {
+    const eligibleRaw = familyConfig?.reward_eligible_tickers;
+    const eligibleTickers = eligibleRaw && eligibleRaw.length > 0
+        ? eligibleRaw.map(t => normalizeTicker(t))
+        : DEFAULT_REWARD_TICKERS.map(t => normalizeTicker(t));
+
+    // Also include the sp500 ticker if configured
+    const sp500 = familyConfig?.sp500_ticker;
+    if (sp500) eligibleTickers.push(normalizeTicker(sp500));
+
+    const ticker = normalizeTicker(inv.ticker || '');
+    if (!ticker || !eligibleTickers.includes(ticker)) return null;
+
+    const days = inv.daysHeld ?? daysBetween(inv.purchase_date);
+    if (days < 30) return null;
+
+    for (const m of MILESTONES) {
+        if (days >= m.days) {
+            return { ...m, days: days };
+        }
+    }
+    return null;
+}
+
 export function computeMatching(investments, familyConfig) {
     const sp500Ticker = familyConfig?.sp500_ticker;
     if (!sp500Ticker) return { deposits: [], matched: 0, total: 0 };

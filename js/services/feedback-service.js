@@ -15,7 +15,7 @@ async function db() {
     return _db;
 }
 
-export async function sendFeedback({ text, type }) {
+export async function sendFeedback({ text, type, area = null, subType = null }) {
     const firestore = await db();
     const { collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
     const user = store.get('user');
@@ -24,6 +24,8 @@ export async function sendFeedback({ text, type }) {
     await addDoc(collection(firestore, 'feedback'), {
         text,
         type: type || 'other',
+        area,
+        sub_type: subType,
         author_name: user.displayName || user.kidName || user.email,
         author_uid: user.uid,
         author_email: user.email,

@@ -38,7 +38,56 @@ function getSecurityMetal(inv) {
 }
 
 // How many shekels each coin represents
-const SHEKELS_PER_COIN = 10;
+const SHEKELS_PER_COIN = 80;
+
+// Bill definitions — id maps to CSS class suffix
+const BILL_DEFS = [
+    { id: 'dollar', label: '$',          color1: '#c8f7d4', color2: '#3fa866', border: '#2ecc71', textColor: '#0a4020' },
+    { id: 'shekel', label: '₪',          color1: '#c0e8ff', color2: '#4a9ed0', border: '#0984e3', textColor: '#042d58' },
+    { id: 'stock',  label: 'מניה',       color1: '#fff5c0', color2: '#c89030', border: '#b07818', textColor: '#4a2800' },
+    { id: 'bond',   label: 'איגרת חוב',  color1: '#eae4fc', color2: '#9070d0', border: '#6040c0', textColor: '#2a1060' },
+];
+
+// Simulate bills falling into jar — fan layout with seeded randomness
+function buildBills(seed) {
+    const rng = seededRandom(seed + 1337);
+
+    // Pool: 3 dollar, 3 shekel, 2 stock, 2 bond
+    const pool = [
+        { ...BILL_DEFS[0], w: 58, h: 122 },
+        { ...BILL_DEFS[0], w: 54, h: 112 },
+        { ...BILL_DEFS[0], w: 56, h: 118 },
+        { ...BILL_DEFS[1], w: 56, h: 116 },
+        { ...BILL_DEFS[1], w: 58, h: 120 },
+        { ...BILL_DEFS[1], w: 54, h: 110 },
+        { ...BILL_DEFS[2], w: 56, h: 114 },
+        { ...BILL_DEFS[2], w: 54, h: 108 },
+        { ...BILL_DEFS[3], w: 58, h: 118 },
+        { ...BILL_DEFS[3], w: 56, h: 112 },
+    ];
+
+    // Shuffle so types are interleaved, not grouped
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    const containerW = 300; // matches jar-coins width (bills live inside jar-coins)
+    const n = pool.length;
+    const spread = 76;   // ±spread from center
+    const maxAngle = 26; // max lean angle
+
+    return pool.map((bill, i) => {
+        const t = n > 1 ? i / (n - 1) : 0.5; // 0..1 left→right
+        const baseX = containerW / 2 - bill.w / 2 + (t - 0.5) * spread * 2;
+        const jitter = (rng() - 0.5) * 12;
+        const x = Math.round(Math.max(8, Math.min(containerW - bill.w - 8, baseX + jitter)));
+        const baseRot = (t - 0.5) * maxAngle * 2;
+        const jitterRot = (rng() - 0.5) * 5;
+        const rotate = Math.round((baseRot + jitterRot) * 10) / 10;
+        return { ...bill, x, rotate, zIndex: i + 1 };
+    });
+}
 
 // Seeded random for stable layout
 function seededRandom(seed) {
@@ -149,7 +198,7 @@ function buildCoins(investments, totalInvested) {
         [allCoins[i], allCoins[j]] = [allCoins[j], allCoins[i]];
     }
 
-    const coins = allCoins.slice(0, 70);
+    const coins = allCoins.slice(0, 20);
 
     // Run physics simulation
     const containerW = 300; // matches CSS jar-coins width
@@ -205,16 +254,21 @@ export function render(container, summary, family, investments = [], labelPrefix
     const arrow = summary.gainLoss >= 0 ? '▲' : '▼';
 
     const coins = buildCoins(investments, summary.totalInvested);
+    const bills = buildBills(Math.round((summary.totalInvested || 100) * 7 + 42));
+    const billsHtml = bills.map(b =>
+        `<div class="jar-bill jar-bill--${b.id}" style="left:${b.x}px;width:${b.w}px;height:${b.h}px;--bill-c1:${b.color1};--bill-c2:${b.color2};--bill-bd:${b.border};--bill-tx:${b.textColor};z-index:${b.zIndex};transform:rotate(${b.rotate}deg)"><span class="bill-label">${b.label}</span></div>` // eslint-disable-line
+    ).join('');
 
+    // note: billsHtml contains only static, code-generated HTML — no user input // noqa
     container.innerHTML = `
         <div class="jar-container jar-unified">
             <div class="jar-lid">
                 <div class="jar-lid-knob"></div>
-                <div class="jar-lid-invested">
+                <div class="jar-lid-invested has-tip" title="${t.summaryCards.tipInvested}">
                     <div class="jar-lid-label">${labelPrefix}${t.summaryCards.totalInvested}</div>
                     <div class="jar-lid-invested-value">${formatCurrency(summary.totalInvested, sym)}</div>
                 </div>
-                <div class="jar-lid-gainloss ${glClass}">
+                <div class="jar-lid-gainloss ${glClass} has-tip" title="${t.summaryCards.tipGainLoss}">
                     <span class="jar-lid-arrow">${arrow}</span>
                     <span class="jar-lid-gl-amount">${formatCurrency(Math.abs(summary.gainLoss), sym)}</span>
                     <span class="jar-lid-gl-pct">(${formatPct(summary.gainLossPct)})</span>
@@ -223,11 +277,14 @@ export function render(container, summary, family, investments = [], labelPrefix
             <div class="jar-neck"></div>
             <div class="jar-body">
                 <div class="jar-coins">
+                    <div class="jar-bills" aria-hidden="true">${billsHtml}</div>
                     ${coins || '<div class="jar-empty">🪙</div>'}
                 </div>
-                <div class="jar-current-value">
-                    <div class="jar-current-label">${labelPrefix}${t.summaryCards.currentValue}</div>
-                    <div class="jar-current-amount">${formatCurrency(summary.totalCurrent, sym)}</div>
+                <div class="jar-floor">
+                    <div class="jar-current-value has-tip" title="${t.summaryCards.tipCurrentValue}">
+                        <div class="jar-current-label">${labelPrefix}${t.summaryCards.currentValue}</div>
+                        <div class="jar-current-amount">${formatCurrency(summary.totalCurrent, sym)}</div>
+                    </div>
                 </div>
                 <div class="jar-shine"></div>
                 <div class="jar-shine-left"></div>

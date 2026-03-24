@@ -58,14 +58,20 @@ function parseJson(raw) {
     const arr = Array.isArray(parsed) ? parsed : [parsed];
     const topics = [];
     for (const item of arr) {
-        if (!item || typeof item !== 'object' || !String(item.title || '').trim()) continue;
+        if (!item || typeof item !== 'object') continue;
+        const isDelete = item._delete === true;
+        // Delete entries only need an id or template_id, no title required
+        if (!isDelete && !String(item.title || '').trim()) continue;
         topics.push({
-            title:    String(item.title).trim(),
-            category: (typeof item.category === 'string' && item.category.trim()) ? item.category.trim() : 'כללי',
-            content:  String(item.content || '').trim(),
-            status:   item.status === 'draft' ? 'draft' : 'published',
-            quiz:     normalizeQuiz(item.quiz),
-            game:     normalizeGame(item.game),
+            id:          item.id || null,
+            template_id: item.template_id || null,
+            _delete:     isDelete,
+            title:       String(item.title || '').trim(),
+            category:    (typeof item.category === 'string' && item.category.trim()) ? item.category.trim() : 'כללי',
+            content:     String(item.content || '').trim(),
+            status:      item.status === 'draft' ? 'draft' : 'published',
+            quiz:        normalizeQuiz(item.quiz),
+            game:        normalizeGame(item.game),
         });
     }
     if (topics.length === 0) throw new Error(t.school.importNoTopics);
@@ -98,16 +104,23 @@ function normalizeGame(game) {
 
 function previewCardHtml(topic, idx) {
     const badges = [];
-    if (topic.quiz?.length)        badges.push(`<span class="import-badge quiz">${t.school.importQuizCount(topic.quiz.length)}</span>`);
-    if (topic.game?.pairs?.length) badges.push(`<span class="import-badge game">${t.school.importGamePairs(topic.game.pairs.length)}</span>`);
-    if (topic.status === 'draft')  badges.push(`<span class="import-badge draft">${t.school.draftBadge}</span>`);
-    if (!VALID_CATEGORIES.includes(topic.category)) badges.push(`<span class="import-badge new-cat">📌 ${t.school.importNewCategory}</span>`);
+    if (topic._delete) {
+        badges.push(`<span class="import-badge delete">${t.school.importWillDelete}</span>`);
+    } else {
+        if (topic.quiz?.length)        badges.push(`<span class="import-badge quiz">${t.school.importQuizCount(topic.quiz.length)}</span>`);
+        if (topic.game?.pairs?.length) badges.push(`<span class="import-badge game">${t.school.importGamePairs(topic.game.pairs.length)}</span>`);
+        if (topic.status === 'draft')  badges.push(`<span class="import-badge draft">${t.school.draftBadge}</span>`);
+        if (!VALID_CATEGORIES.includes(topic.category)) badges.push(`<span class="import-badge new-cat">📌 ${t.school.importNewCategory}</span>`);
+        if (topic.id || topic.template_id) badges.push(`<span class="import-badge has-id">${t.school.importHasId}</span>`);
+        else                               badges.push(`<span class="import-badge no-id">${t.school.importNoId}</span>`);
+    }
+    const displayTitle = topic.title || topic.id || topic.template_id || '';
     return `
         <label class="import-preview-card">
             <input type="checkbox" class="import-topic-check" data-idx="${idx}" checked />
             <div class="import-preview-info">
-                <span class="import-preview-title">${esc(topic.title)}</span>
-                <span class="import-preview-cat">${esc(topic.category)}</span>
+                <span class="import-preview-title">${esc(displayTitle)}</span>
+                <span class="import-preview-cat">${topic._delete ? '' : esc(topic.category)}</span>
                 ${badges.join('')}
             </div>
         </label>`;
@@ -168,6 +181,23 @@ export function showImportModal(familyId, user) {
                 <div id="import-preview-section" hidden>
                     <p class="import-preview-label">${t.school.importPreviewTitle}</p>
                     <div id="import-preview-list" class="import-preview-list"></div>
+
+                    <!-- Import mode selector -->
+                    <div class="import-mode-row">
+                        <span class="import-mode-label">${t.school.importModeLabel}</span>
+                        <label class="import-mode-option">
+                            <input type="radio" name="import-mode" value="add" checked />
+                            ${t.school.importModeAdd}
+                        </label>
+                        <label class="import-mode-option">
+                            <input type="radio" name="import-mode" value="replace" />
+                            ${t.school.importModeReplace}
+                        </label>
+                        <label class="import-mode-option">
+                            <input type="radio" name="import-mode" value="override" />
+                            ${t.school.importModeOverride}
+                        </label>
+                    </div>
                 </div>
 
             </div>
@@ -189,6 +219,8 @@ export function showImportModal(familyId, user) {
     const previewSec  = overlay.querySelector('#import-preview-section');
     const previewList = overlay.querySelector('#import-preview-list');
     const submitBtn   = overlay.querySelector('#import-submit-btn');
+
+    const getMode = () => overlay.querySelector('input[name="import-mode"]:checked')?.value || 'add';
 
     const close = () => overlay.remove();
     overlay.querySelector('#import-modal-close').addEventListener('click', close);
@@ -227,7 +259,10 @@ export function showImportModal(familyId, user) {
     const updateSubmitBtn = () => {
         const n = overlay.querySelectorAll('.import-topic-check:checked').length;
         submitBtn.hidden = n === 0;
-        submitBtn.textContent = t.school.importSubmitBtn(n);
+        const mode = getMode();
+        if (mode === 'replace') submitBtn.textContent = t.school.importSubmitReplace(n);
+        else if (mode === 'override') submitBtn.textContent = t.school.importSubmitOverride(n);
+        else submitBtn.textContent = t.school.importSubmitBtn(n);
     };
 
     // File upload → auto-parse immediately
@@ -245,12 +280,17 @@ export function showImportModal(familyId, user) {
     textarea.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 'Enter') showPreview(textarea.value); });
 
     previewList.addEventListener('change', updateSubmitBtn);
+    overlay.querySelectorAll('input[name="import-mode"]').forEach(r => r.addEventListener('change', updateSubmitBtn));
 
     // ── Import selected ───────────────────────────────────────
     submitBtn.addEventListener('click', async () => {
         const selected = [...overlay.querySelectorAll('.import-topic-check:checked')]
             .map(cb => _parsedTopics[parseInt(cb.dataset.idx, 10)]);
         if (!selected.length) return;
+
+        const mode = getMode();
+
+        if (mode === 'override' && !window.confirm(t.school.importModeOverrideWarn)) return;
 
         submitBtn.disabled = true;
         parseBtn.disabled  = true;
@@ -259,24 +299,64 @@ export function showImportModal(familyId, user) {
             ? (store.get('family')?.family_name || t.school.parent)
             : (user?.kidName || t.school.kid);
 
-        let done = 0;
-        for (const topic of selected) {
-            submitBtn.textContent = t.school.importingProgress(done, selected.length);
-            try {
-                await schoolService.addTopic(familyId, { ...topic, created_by_name: authorName });
-                done++;
-            } catch (err) {
-                console.error('Import error:', err);
-                parseError.textContent = `${t.school.importError}: ${topic.title}`;
-                parseError.hidden = false;
-                submitBtn.disabled = false;
-                parseBtn.disabled  = false;
-                submitBtn.textContent = t.school.importSubmitBtn(selected.length - done);
+        try {
+            if (mode === 'override') {
+                submitBtn.textContent = t.school.importingProgress(0, selected.length);
+                await schoolService.overrideAllTopics(familyId, selected, authorName);
+                submitBtn.textContent = t.school.importSuccess(selected.length);
+                setTimeout(close, 1400);
                 return;
             }
-        }
 
-        submitBtn.textContent = t.school.importSuccess(done);
-        setTimeout(close, 1400);
+            let done = 0;
+            for (const topic of selected) {
+                submitBtn.textContent = t.school.importingProgress(done, selected.length);
+                try {
+                    if (mode === 'replace') {
+                        if (topic._delete) {
+                            if (topic.id) {
+                                await schoolService.deleteTopic(familyId, topic.id);
+                            } else if (topic.template_id) {
+                                await schoolService.deleteTopicByTemplateId(familyId, topic.template_id);
+                            }
+                        } else if (topic.id) {
+                            const { id: _id, _delete, ...data } = topic;
+                            await schoolService.upsertTopicById(familyId, topic.id, data);
+                        } else if (topic.template_id) {
+                            const { id: _id, _delete, ...data } = topic;
+                            await schoolService.upsertTopicByTemplateId(familyId, topic.template_id, data, authorName);
+                        } else {
+                            const { id: _id, template_id: _tid, _delete, ...data } = topic;
+                            await schoolService.addTopic(familyId, { ...data, created_by_name: authorName });
+                        }
+                    } else {
+                        // mode === 'add'
+                        const { id: _id, template_id: _tid, _delete, ...data } = topic;
+                        await schoolService.addTopic(familyId, { ...data, created_by_name: authorName });
+                    }
+                    done++;
+                } catch (err) {
+                    console.error('Import error:', err);
+                    parseError.textContent = `${t.school.importError}: ${topic.title || topic.id}`;
+                    parseError.hidden = false;
+                    submitBtn.disabled = false;
+                    parseBtn.disabled  = false;
+                    submitBtn.textContent = mode === 'replace'
+                        ? t.school.importSubmitReplace(selected.length - done)
+                        : t.school.importSubmitBtn(selected.length - done);
+                    return;
+                }
+            }
+
+            submitBtn.textContent = t.school.importSuccess(done);
+            setTimeout(close, 1400);
+        } catch (err) {
+            console.error('Import error:', err);
+            parseError.textContent = `${t.school.importError}: ${err.message}`;
+            parseError.hidden = false;
+            submitBtn.disabled = false;
+            parseBtn.disabled  = false;
+            updateSubmitBtn();
+        }
     });
 }

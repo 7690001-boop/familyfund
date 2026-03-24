@@ -21,7 +21,7 @@ import { showSimulationModal, deleteSimulation } from '../modals/simulation-moda
 import { renderAvatar, DEFAULT_AVATAR } from '../ui/avatar.js';
 import { showAvatarModal } from '../modals/avatar-modal.js';
 import { togglePrivacy, isInCooldown, getCooldownRemaining } from '../../services/family-service.js';
-import { showRenameMemberModal, showChangeSelfPasswordModal } from '../modals/member-modals.js';
+import { showRenameMemberModal } from '../modals/member-modals.js';
 import { emit } from '../../event-bus.js';
 import t from '../../i18n.js';
 
@@ -109,15 +109,14 @@ function renderView() {
                 ${canEditAvatar ? `<button class="avatar-edit-btn" id="edit-avatar-btn" title="${t.kidView.editAvatarTitle}">✏️</button>` : ''}
             </div>
             <h2 class="kid-header-name">${_kidName}${canEditName ? ` <button class="name-edit-btn" id="edit-name-btn" title="${t.kidView.editNameTitle}">✏️</button>` : ''}</h2>
-            ${canTogglePrivacy ? `
+            ${canTogglePrivacy && !isMemberView ? `
                 <label class="privacy-toggle${isAutoPrivate ? ' privacy-toggle-locked' : ''}" title="${isAutoPrivate ? t.kidView.autoPrivateHint : (isPrivate ? t.kidView.privateTitle : t.kidView.publicTitle)}">
                     <input type="checkbox" id="privacy-checkbox" ${isPrivate ? 'checked' : ''} ${isAutoPrivate ? 'disabled' : ''}>
                     <span class="privacy-toggle-label">${isAutoPrivate ? t.kidView.autoPrivateLabel : (isPrivate ? t.kidView.privateLabel : t.kidView.publicLabel)}</span>
                 </label>
                 ${isAutoPrivate ? `<span class="auto-private-hint">${t.kidView.autoPrivateHint}</span>` : ''}
-                ${inCooldown && !isManager ? `<div class="cooldown-banner">${t.kidView.cooldownInfo(cooldownRemaining)}</div>` : ''}
             ` : ''}
-            ${isMemberView ? `<button class="btn btn-ghost" id="change-password-btn" style="font-size:0.82rem;margin-top:0.25rem">${t.kidView.changePassword}</button>` : ''}
+            ${inCooldown && !isManager ? `<div class="cooldown-banner">${t.kidView.cooldownInfo(cooldownRemaining)}</div>` : ''}
         </section>
         <section class="summary-section">
             <div class="jar-side" data-slot="summary"></div>
@@ -190,6 +189,22 @@ function renderView() {
             },
             onAddCash: () => showAddCashModal(_kidName),
             onConvert: () => showConvertModal(_kidName),
+            onRowClick: (pos) => investmentHeatmap.showDetail(pos, {
+                familyId: user.familyId,
+                sym: family.currency_symbol || '₪',
+                canEdit: can(user, 'investment:edit'),
+                canNote: can(user, 'investment:note', { kidName: _kidName }),
+                canRename: can(user, 'investment:rename', { kidName: _kidName }),
+                canSell,
+                onEdit: (id) => {
+                    const inv = allInvestments.find(i => i.id === id);
+                    if (inv) showInvestmentModal(_kidName, inv);
+                },
+                onSell: (id) => {
+                    const inv = allInvestments.find(i => i.id === id);
+                    if (inv) showSellModal(_kidName, inv);
+                },
+            }),
         }
     );
 
@@ -248,10 +263,6 @@ function renderView() {
         editNameBtn.addEventListener('click', () => showRenameMemberModal(member.uid || member.id, _kidName));
     }
 
-    const changePasswordBtn = _container.querySelector('#change-password-btn');
-    if (changePasswordBtn) {
-        changePasswordBtn.addEventListener('click', showChangeSelfPasswordModal);
-    }
 
     const privacyCheckbox = _container.querySelector('#privacy-checkbox');
     if (privacyCheckbox && !isAutoPrivate) {

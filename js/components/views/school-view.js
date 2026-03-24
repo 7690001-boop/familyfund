@@ -1,5 +1,5 @@
 // ============================================================
-// School View — Finance school: topic browsing + family discussion
+// School Panel — Collapsible sidebar with topic carousel
 // ============================================================
 
 import * as store from '../../store.js';
@@ -7,19 +7,31 @@ import { esc } from '../../utils/dom-helpers.js';
 import * as schoolService from '../../services/school-service.js';
 import t from '../../i18n.js';
 
-const CATEGORIES = ['מניות', 'אג"ח', 'קרנות', 'ריבית דריבית', 'פיזור', 'שוק ההון', 'כלכלה', 'כללי'];
+const VISIBLE = 3; // topic bars shown at once
 
 let _container = null;
 let _unsubs = [];
 let _renderTimer = null;
-let _activeFilter = '';
-let _expandedTopicId = null;
-let _unsubComments = null;
-let _comments = [];
 let _familyId = null;
-let _quizState = {}; // { [topicId]: { [qIdx]: selectedOptionIdx } }
-let _gameState = {}; // { [topicId]: { selected: number|null, matched: Set, shuffledDefs: number[] } }
-let _questions = []; // questions for expanded topic
+let _userId = null;
+
+// Panel state: 'collapsed' | 'sidebar' | 'expanded'
+let _panelState = 'sidebar';
+
+// Carousel state
+let _carouselStart = 0;  // index of first visible topic bar
+let _expandedTopicId = null;
+let _searchQuery = '';
+
+// Progress
+let _progress = {};
+
+// Topic interaction state
+let _quizState = {};
+let _gameState = {};
+let _comments = [];
+let _questions = [];
+let _unsubComments = null;
 let _unsubQuestions = null;
 
 function debouncedRender() {
@@ -27,15 +39,22 @@ function debouncedRender() {
     _renderTimer = setTimeout(renderView, 50);
 }
 
+// ─── Public API ──────────────────────────────────────────────
+
 export async function mount(container) {
     unmount();
     _container = container;
 
     const user = store.get('user');
     _familyId = user?.familyId;
-    if (!_familyId) return;
+    _userId = user?.uid;
+    if (!_familyId || !_userId) return;
 
     await schoolService.listen(_familyId);
+    await schoolService.listenProgress(_familyId, _userId, (prog) => {
+        _progress = prog;
+        debouncedRender();
+    });
 
     _unsubs.push(store.subscribe('schoolTopics', debouncedRender));
     renderView();
@@ -48,123 +67,230 @@ export function unmount() {
     if (_unsubComments) { _unsubComments(); _unsubComments = null; }
     if (_unsubQuestions) { _unsubQuestions(); _unsubQuestions = null; }
     schoolService.stopListening();
+    schoolService.stopListeningProgress();
     _container = null;
     _expandedTopicId = null;
     _comments = [];
-    _activeFilter = '';
+    _questions = [];
+    _progress = {};
     _quizState = {};
     _gameState = {};
-    _questions = [];
+    _userId = null;
+    _carouselStart = 0;
+    _searchQuery = '';
 }
 
-function renderView() {
-    if (!_container) return;
-    const user = store.get('user');
-    const topics = store.get('schoolTopics') || [];
-    const isManager = user?.role === 'manager';
-
-    const filtered = _activeFilter
-        ? topics.filter(t => t.category === _activeFilter)
-        : topics;
-
-    const customCats = [...new Set(topics.map(tp => tp.category).filter(c => c && !CATEGORIES.includes(c)))];
-    const allCats = [...CATEGORIES, ...customCats];
-    const filterPills = ['', ...allCats].map(cat => {
-        const label = cat || t.school.filterAll;
-        const active = _activeFilter === cat ? ' active' : '';
-        return `<button class="school-filter-pill${active}" data-cat="${esc(cat)}">${esc(label)}</button>`;
-    }).join('');
-
-    const topicsHtml = filtered.length === 0
-        ? `<div class="school-empty">
-               ${t.school.emptyTopics}
-               ${isManager && !_activeFilter ? `<br><button class="btn btn-secondary school-seed-btn" id="school-seed-topics-btn" style="margin-top:1rem">${t.school.seedTopicsBtn}</button>` : ''}
-           </div>`
-        : filtered.map(topic => renderTopicCard(topic, isManager, user)).join('');
-
-    _container.innerHTML = `
-        <section class="school-view">
-            <div class="school-header">
-                <div class="school-title-row">
-                    <div>
-                        <h2 class="school-title">📚 ${t.school.title}</h2>
-                        <p class="school-subtitle">${t.school.subtitle}</p>
-                    </div>
-                    <div class="school-manager-btns">
-                        ${isManager ? `<button class="btn btn-secondary school-seed-btn" id="school-seed-topics-btn">${t.school.seedTopicsBtn}</button>` : ''}
-                        ${isManager ? `<button class="btn btn-secondary school-export-all-btn" id="school-export-all-btn">${t.school.exportAllTopicsBtn}</button>` : ''}
-                        ${isManager ? `<button class="btn btn-secondary school-import-btn" id="school-import-btn">${t.school.importTopicBtn}</button>` : ''}
-                        ${isManager ? `<button class="btn btn-primary school-add-btn" id="school-add-topic-btn">${t.school.addTopicBtn}</button>` : ''}
-                    </div>
-                </div>
-                <div class="school-filters">${filterPills}</div>
-            </div>
-            <div class="school-topics" id="school-topics-list">
-                ${topicsHtml}
-            </div>
-        </section>
-    `;
-
-    wireEvents();
-
-    // Re-render comments if a topic is expanded
-    if (_expandedTopicId) {
-        const expanded = _container.querySelector(`.topic-card[data-topic-id="${CSS.escape(_expandedTopicId)}"]`);
-        if (expanded) renderCommentsPanel(expanded);
+export function setState(state) {
+    if (['collapsed', 'sidebar', 'expanded'].includes(state)) {
+        _panelState = state;
+        renderView();
     }
 }
 
-function renderTopicCard(topic, isManager, user) {
-    const isExpanded = topic.id === _expandedTopicId;
-    const commentCount = topic.comment_count ?? 0;
-    const catColor = categoryColor(topic.category);
-    const dateStr = topic.created_at ? new Date(topic.created_at).toLocaleDateString('he-IL') : '';
+// Kept for backward-compat with shell toggle
+export function setOpen(val) {
+    _panelState = val ? 'sidebar' : 'collapsed';
+    renderView();
+}
 
-    const contentLines = (topic.content || '').split('\n').map(line => `<p>${esc(line)}</p>`).join('');
+export function isOpen() {
+    return _panelState !== 'collapsed';
+}
 
-    const commentsHtml = isExpanded
-        ? renderComments(topic, isManager, user)
+export function getState() {
+    return _panelState;
+}
+
+// ─── Rendering ───────────────────────────────────────────────
+
+function renderView() {
+    if (!_container) return;
+
+    _container.classList.remove('collapsed', 'sidebar', 'expanded');
+    _container.classList.add(_panelState);
+
+    if (_panelState === 'collapsed') {
+        _container.innerHTML = `
+            <button class="sp-collapse-handle" id="sp-handle-btn" title="${t.school.title}">
+                <span class="sp-handle-icon">📚</span>
+                <span class="sp-handle-arrow" title="לחצו לפתוח את בית הספר להשקעות">‹</span>
+            </button>`;
+        _container.querySelector('#sp-handle-btn')?.addEventListener('click', () => setState('sidebar'));
+        return;
+    }
+
+    const user = store.get('user');
+    const isManager = user?.role === 'manager';
+    const allTopics = store.get('schoolTopics') || [];
+
+    // Filter: only published topics (unless manager sees drafts too)
+    const publishedTopics = isManager ? allTopics : allTopics.filter(tp => tp.status !== 'draft');
+
+    // Search filter
+    let filtered = _searchQuery
+        ? publishedTopics.filter(tp =>
+            tp.title?.toLowerCase().includes(_searchQuery.toLowerCase()) ||
+            tp.content?.toLowerCase().includes(_searchQuery.toLowerCase()) ||
+            tp.category?.toLowerCase().includes(_searchQuery.toLowerCase())
+          )
+        : publishedTopics;
+
+    // Clamp carousel start
+    const maxStart = Math.max(0, filtered.length - VISIBLE);
+    if (_carouselStart > maxStart) _carouselStart = maxStart;
+
+    const visible = filtered.slice(_carouselStart, _carouselStart + VISIBLE);
+    const canPrev = _carouselStart > 0;
+    const canNext = _carouselStart < maxStart;
+
+    // Progress stats (only on published)
+    const total = publishedTopics.length;
+    const doneCount = publishedTopics.filter(tp => isTopicDone(tp, _progress[tp.id])).length;
+    const pct = total > 0 ? Math.round(doneCount / total * 100) : 0;
+
+    // Dots (one per visible window position)
+    const numDots = Math.max(1, filtered.length - VISIBLE + 1);
+    const dotsHtml = numDots > 1
+        ? Array.from({ length: numDots }, (_, i) =>
+            `<span class="sp-dot${i === _carouselStart ? ' active' : ''}" data-idx="${i}"></span>`
+          ).join('')
         : '';
 
-    return `
-        <div class="topic-card${isExpanded ? ' expanded' : ''}" data-topic-id="${esc(topic.id)}">
-            <div class="topic-card-header" data-action="toggle">
-                <div class="topic-card-main">
-                    <span class="topic-category-badge" style="--cat-color:${catColor}">${esc(topic.category || t.school.categoryGeneral)}</span>
-                    ${topic.status === 'draft' ? `<span class="topic-draft-badge">${t.school.draftBadge}</span>` : ''}
-                    <h3 class="topic-title-text">${esc(topic.title)}</h3>
-                </div>
-                <div class="topic-card-meta">
-                    <span class="topic-comment-count">💬 ${commentCount}</span>
-                    ${dateStr ? `<span class="topic-date">${esc(dateStr)}</span>` : ''}
-                    ${isManager ? `<button class="topic-delete-btn" data-action="delete" title="${t.school.deleteTopic}">🗑</button>` : ''}
-                    <span class="topic-chevron">${isExpanded ? '▲' : '▼'}</span>
+    const topicBarsHtml = visible.length === 0
+        ? `<div class="sp-empty">${_searchQuery ? t.school.searchEmpty : t.school.emptyTopics}</div>`
+        : visible.map(tp => renderTopicBar(tp, isManager)).join('');
+
+    const expandedTopic = _expandedTopicId ? allTopics.find(tp => tp.id === _expandedTopicId) : null;
+
+    const handleGlyph = _panelState === 'sidebar' ? '«' : '»';
+    const handleTitle = _panelState === 'sidebar' ? 'הרחב' : 'כווץ';
+
+    _container.innerHTML = `
+        <button class="sp-collapse-handle" id="sp-handle-btn" title="${handleTitle}">${handleGlyph}</button>
+        <div class="school-panel">
+            <div class="sp-header">
+                <span class="sp-header-logo">📚</span>
+                <span class="sp-header-title">${t.school.title}</span>
+                <div class="sp-header-actions">
+                    ${isManager ? `<button class="sp-btn sp-manage-btn" id="sp-manage-btn" title="ניהול">⚙️</button>` : ''}
                 </div>
             </div>
-            ${isExpanded ? `
-            <div class="topic-card-body">
-                <div class="topic-content">${contentLines}</div>
-                ${renderQuiz(topic)}
-                ${renderGame(topic)}
-                ${renderQuestions(topic, isManager, user)}
-                <div class="topic-discussion" id="discussion-${esc(topic.id)}">
-                    ${commentsHtml}
-                </div>
-                <div class="topic-card-footer-actions">
-                    <button class="btn btn-secondary-outline topic-edit-btn" data-action="edit">
-                        ${t.school.editTopicBtn}
-                    </button>
-                    <button class="btn btn-secondary-outline topic-export-btn" data-action="export">
-                        ${t.school.exportTopicBtn}
-                    </button>
-                    ${isManager ? `<button class="btn btn-danger-outline topic-delete-full-btn" data-action="delete">
-                        🗑 ${t.school.deleteTopic}
-                    </button>` : ''}
-                </div>
+
+            ${total > 0 ? `
+            <div class="sp-progress-row">
+                <div class="sp-prog-track"><div class="sp-prog-fill" style="width:${pct}%"></div></div>
+                <span class="sp-prog-label">${doneCount}/${total} ${t.school.progressDone}</span>
             </div>` : ''}
-        </div>
-    `;
+
+            <div class="sp-search-row">
+                <input class="sp-search-input" id="sp-search" type="search"
+                       placeholder="${t.school.searchPlaceholder}" value="${esc(_searchQuery)}" />
+            </div>
+
+            ${_panelState === 'expanded' ? `
+            <div class="sp-expanded-layout">
+                <div class="sp-expanded-left">
+                    <div class="sp-carousel-area">
+                        <button class="sp-arrow sp-arrow-start" id="sp-prev" ${canPrev ? '' : 'disabled'}>›</button>
+                        <div class="sp-topics-list">
+                            ${topicBarsHtml}
+                        </div>
+                        <button class="sp-arrow sp-arrow-end" id="sp-next" ${canNext ? '' : 'disabled'}>‹</button>
+                    </div>
+                    ${dotsHtml ? `<div class="sp-dots">${dotsHtml}</div>` : ''}
+                </div>
+                <div class="sp-expanded-right" id="sp-detail">
+                    ${expandedTopic
+                        ? renderTopicDetail(expandedTopic, isManager, user)
+                        : `<div class="sp-detail-placeholder"><p>📖</p><p>${t.school.expandedHint}</p></div>`}
+                </div>
+            </div>` : `
+            <div class="sp-carousel-area">
+                <button class="sp-arrow sp-arrow-start" id="sp-prev" ${canPrev ? '' : 'disabled'}>›</button>
+                <div class="sp-topics-list">
+                    ${topicBarsHtml}
+                </div>
+                <button class="sp-arrow sp-arrow-end" id="sp-next" ${canNext ? '' : 'disabled'}>‹</button>
+            </div>
+            ${dotsHtml ? `<div class="sp-dots">${dotsHtml}</div>` : ''}
+            ${expandedTopic ? `
+            <div class="sp-detail" id="sp-detail">
+                ${renderTopicDetail(expandedTopic, isManager, user)}
+            </div>` : ''}`}
+        </div>`;
+
+    wirePanelEvents(isManager, user, filtered);
+
+    // Re-wire live listeners
+    if (_expandedTopicId) {
+        wireCommentFormEvents(_expandedTopicId);
+        wireQuestionFormEvents(_expandedTopicId);
+    }
+
+    // Wire quiz/game in expanded detail
+    _container.querySelectorAll('.topic-quiz').forEach(el => wireQuizEvents(el, el.dataset.quizTopicId));
+    _container.querySelectorAll('.topic-game').forEach(el => wireGameEvents(el, el.dataset.gameTopicId));
 }
+
+function renderTopicBar(topic, isManager) {
+    const catColor = categoryColor(topic.category);
+    const prog = _progress[topic.id];
+    const isDone = isTopicDone(topic, prog);
+    const isRead = !!prog?.read;
+    const hasNew = hasNewActivity(topic, prog);
+    const isExpanded = topic.id === _expandedTopicId;
+    const commentCount = topic.comment_count ?? 0;
+    const preview = (topic.content || '').replace(/\n/g, ' ').slice(0, 55) + ((topic.content || '').length > 55 ? '…' : '');
+
+    const badge = isDone
+        ? `<span class="sp-bar-badge sp-badge-done">${t.school.badgeDone}</span>`
+        : isRead
+        ? `<span class="sp-bar-badge sp-badge-read">${t.school.badgeRead}</span>`
+        : '';
+    const newBadge = hasNew ? `<span class="sp-bar-badge sp-badge-new">${t.school.badgeNewActivity}</span>` : '';
+    const draftBadge = topic.status === 'draft' ? `<span class="sp-bar-badge sp-badge-draft">${t.school.draftBadge}</span>` : '';
+
+    return `
+        <div class="sp-topic-bar${isExpanded ? ' active' : ''}" data-topic-id="${esc(topic.id)}" tabindex="0">
+            <div class="sp-topic-color" style="background:${catColor}"></div>
+            <div class="sp-topic-body">
+                <div class="sp-topic-title">${esc(topic.title)}</div>
+                <div class="sp-topic-preview">${esc(preview)}</div>
+                <div class="sp-topic-meta">
+                    <span class="sp-topic-cat" style="color:${catColor}">${esc(topic.category || t.school.categoryGeneral)}</span>
+                    ${badge}${newBadge}${draftBadge}
+                </div>
+            </div>
+            <div class="sp-topic-side">
+                <span class="sp-topic-comments">💬 ${commentCount}</span>
+            </div>
+        </div>`;
+}
+
+function renderTopicDetail(topic, isManager, user) {
+    const contentLines = (topic.content || '').split('\n').map(line => `<p>${esc(line)}</p>`).join('');
+    const commentsHtml = renderComments(topic, isManager, user);
+
+    return `
+        <div class="sp-detail-inner">
+            <div class="sp-detail-header">
+                <h3 class="sp-detail-title">${esc(topic.title)}</h3>
+                <button class="sp-btn sp-detail-close" id="sp-detail-close" title="סגור">✕</button>
+            </div>
+            <div class="sp-detail-content">${contentLines}</div>
+            ${renderQuiz(topic)}
+            ${renderGame(topic)}
+            ${renderQuestions(topic, isManager, user)}
+            <div class="topic-discussion" id="discussion-${esc(topic.id)}">${commentsHtml}</div>
+            ${isManager ? `
+            <div class="sp-detail-actions">
+                <button class="btn btn-secondary-outline btn-small topic-edit-btn-sp" data-action="edit" data-topic-id="${esc(topic.id)}">${t.school.editTopicBtn}</button>
+                <button class="btn btn-danger-outline btn-small topic-delete-btn-sp" data-action="delete" data-topic-id="${esc(topic.id)}">🗑 ${t.school.deleteTopic}</button>
+            </div>` : ''}
+        </div>`;
+}
+
+// ─── Existing render helpers (unchanged) ─────────────────────
 
 function renderComments(topic, isManager, user) {
     const commentsHtml = _comments.length === 0
@@ -188,8 +314,7 @@ function renderComments(topic, isManager, user) {
                    type="text" placeholder="${t.school.commentPlaceholder}" maxlength="500" />
             <button class="btn btn-small btn-primary school-comment-submit"
                     id="comment-submit-${esc(topic.id)}">${t.school.commentSubmit}</button>
-        </div>
-    `;
+        </div>`;
 }
 
 function renderQuiz(topic) {
@@ -292,9 +417,6 @@ function renderGame(topic) {
 }
 
 function renderQuestions(topic, isManager, user) {
-    const authorName = user?.role === 'manager'
-        ? (store.get('family')?.family_name || t.school.parent)
-        : (user?.kidName || t.school.kid);
     const questionsHtml = _questions.length === 0
         ? `<p class="school-no-questions">${t.school.noQuestions}</p>`
         : _questions.map(q => `
@@ -331,6 +453,21 @@ function renderQuestions(topic, isManager, user) {
         </div>`;
 }
 
+// ─── Helper functions ─────────────────────────────────────────
+
+function isTopicDone(topic, prog) {
+    if (!prog?.read) return false;
+    if (topic.quiz?.length && !prog.quizDone) return false;
+    if (topic.game?.pairs?.length && !prog.gameDone) return false;
+    return true;
+}
+
+function hasNewActivity(topic, prog) {
+    if (!prog?.lastSeen) return false;
+    return (topic.last_question_at && topic.last_question_at > prog.lastSeen)
+        || (topic.last_comment_at && topic.last_comment_at > prog.lastSeen);
+}
+
 function categoryColor(cat) {
     const map = {
         'מניות':          '#3b82f6',
@@ -345,6 +482,97 @@ function categoryColor(cat) {
     return map[cat] || '#6b7280';
 }
 
+// ─── Event wiring ─────────────────────────────────────────────
+
+function wirePanelEvents(isManager, user, filteredTopics) {
+    if (!_container) return;
+
+    // Handle cycles: sidebar → expanded → collapsed → sidebar
+    _container.querySelector('#sp-handle-btn')?.addEventListener('click', () => {
+        setState(_panelState === 'sidebar' ? 'expanded' : 'collapsed');
+    });
+
+    // Manage button (managers only)
+    _container.querySelector('#sp-manage-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showManageMenu(user);
+    });
+
+    // Search
+    const searchInput = _container.querySelector('#sp-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            _searchQuery = searchInput.value;
+            _carouselStart = 0;
+            _expandedTopicId = null;
+            if (_unsubComments) { _unsubComments(); _unsubComments = null; }
+            if (_unsubQuestions) { _unsubQuestions(); _unsubQuestions = null; }
+            _comments = [];
+            _questions = [];
+            renderView();
+        });
+    }
+
+    // Carousel arrows
+    _container.querySelector('#sp-prev')?.addEventListener('click', () => {
+        if (_carouselStart > 0) { _carouselStart--; renderView(); }
+    });
+    _container.querySelector('#sp-next')?.addEventListener('click', () => {
+        const maxStart = Math.max(0, filteredTopics.length - VISIBLE);
+        if (_carouselStart < maxStart) { _carouselStart++; renderView(); }
+    });
+
+    // Dot navigation
+    _container.querySelectorAll('.sp-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+            _carouselStart = parseInt(dot.dataset.idx, 10);
+            renderView();
+        });
+    });
+
+    // Topic bars: click to expand
+    _container.querySelectorAll('.sp-topic-bar').forEach(bar => {
+        bar.addEventListener('click', () => {
+            const topicId = bar.dataset.topicId;
+            if (_expandedTopicId === topicId) {
+                collapseDetail();
+            } else {
+                expandTopic(topicId);
+            }
+        });
+    });
+
+    // Detail close button
+    _container.querySelector('#sp-detail-close')?.addEventListener('click', () => collapseDetail());
+
+    // Manager: edit / delete in detail
+    _container.querySelectorAll('.topic-edit-btn-sp').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const topicId = btn.dataset.topicId;
+            const topics = store.get('schoolTopics') || [];
+            const topic = topics.find(tp => tp.id === topicId);
+            if (!topic) return;
+            const { showTopicModal } = await import('../modals/topic-modal.js');
+            showTopicModal(_familyId, user, topic);
+        });
+    });
+
+    _container.querySelectorAll('.topic-delete-btn-sp').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(t.school.confirmDeleteTopic)) return;
+            const topicId = btn.dataset.topicId;
+            try {
+                await schoolService.deleteTopic(_familyId, topicId);
+                if (_expandedTopicId === topicId) collapseDetail();
+            } catch {
+                alert(t.school.deleteError);
+            }
+        });
+    });
+}
+
 async function expandTopic(topicId) {
     if (_unsubComments) { _unsubComments(); _unsubComments = null; }
     if (_unsubQuestions) { _unsubQuestions(); _unsubQuestions = null; }
@@ -352,7 +580,10 @@ async function expandTopic(topicId) {
     _questions = [];
     _expandedTopicId = topicId;
 
-    // Start listening to comments; on each update, re-render the discussion panel only
+    if (_familyId && _userId) {
+        schoolService.markTopicRead(_familyId, _userId, topicId).catch(() => {});
+    }
+
     _unsubComments = await schoolService.listenComments(_familyId, topicId, (comments) => {
         _comments = comments;
         if (!_container) return;
@@ -360,7 +591,7 @@ async function expandTopic(topicId) {
         if (discussion) {
             const user = store.get('user');
             const topics = store.get('schoolTopics') || [];
-            const topic = topics.find(t => t.id === topicId);
+            const topic = topics.find(tp => tp.id === topicId);
             if (topic) {
                 discussion.innerHTML = renderComments(topic, user?.role === 'manager', user);
                 wireCommentFormEvents(topicId);
@@ -368,7 +599,6 @@ async function expandTopic(topicId) {
         }
     });
 
-    // Start listening to questions
     _unsubQuestions = await schoolService.listenQuestions(_familyId, topicId, (questions) => {
         _questions = questions;
         if (!_container) return;
@@ -384,130 +614,75 @@ async function expandTopic(topicId) {
         }
     });
 
-    debouncedRender();
+    renderView();
 }
 
-function collapseTopic() {
+function collapseDetail() {
     if (_unsubComments) { _unsubComments(); _unsubComments = null; }
     if (_unsubQuestions) { _unsubQuestions(); _unsubQuestions = null; }
     _comments = [];
     _questions = [];
     _expandedTopicId = null;
-    debouncedRender();
+    renderView();
 }
 
-function wireEvents() {
-    if (!_container) return;
-    const user = store.get('user');
+function showManageMenu(user) {
+    // Remove any existing menu
+    document.querySelector('.sp-manage-dropdown')?.remove();
 
-    // Category filter pills
-    _container.querySelectorAll('.school-filter-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-            _activeFilter = pill.dataset.cat;
-            _expandedTopicId = null;
-            if (_unsubComments) { _unsubComments(); _unsubComments = null; }
-            if (_unsubQuestions) { _unsubQuestions(); _unsubQuestions = null; }
-            _comments = [];
-            _questions = [];
-            debouncedRender();
-        });
-    });
+    const menu = document.createElement('div');
+    menu.className = 'sp-manage-dropdown';
+    const isManager = user?.role === 'manager';
+    menu.innerHTML = `
+        ${isManager ? `<button class="sp-menu-item" id="spm-add">➕ ${t.school.addTopicBtn}</button>` : ''}
+        ${isManager ? `<button class="sp-menu-item" id="spm-seed">${t.school.seedTopicsBtn}</button>` : ''}
+        ${isManager ? `<button class="sp-menu-item" id="spm-import">${t.school.importTopicBtn}</button>` : ''}
+        ${isManager ? `<button class="sp-menu-item" id="spm-export">${t.school.exportAllTopicsBtn}</button>` : ''}`;
 
-    // Topic cards: toggle expand / delete / edit
-    _container.querySelectorAll('.topic-card').forEach(card => {
-        const topicId = card.dataset.topicId;
+    const btn = _container.querySelector('#sp-manage-btn');
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left - 120}px;z-index:9999;`;
+    document.body.appendChild(menu);
 
-        card.querySelector('[data-action="toggle"]')?.addEventListener('click', (e) => {
-            if (e.target.closest('[data-action="delete"]') || e.target.closest('[data-action="edit"]') || e.target.closest('[data-action="export"]')) return;
-            if (_expandedTopicId === topicId) {
-                collapseTopic();
-            } else {
-                expandTopic(topicId);
-            }
-        });
+    const close = () => menu.remove();
+    setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
 
-        card.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm(t.school.confirmDeleteTopic)) return;
-                try {
-                    await schoolService.deleteTopic(_familyId, topicId);
-                    if (_expandedTopicId === topicId) collapseTopic();
-                } catch {
-                    alert(t.school.deleteError);
-                }
-            });
-        });
-
-        card.querySelector('[data-action="edit"]')?.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const topics = store.get('schoolTopics') || [];
-            const topic = topics.find(tp => tp.id === topicId);
-            if (!topic) return;
-            const { showTopicModal } = await import('../modals/topic-modal.js');
-            showTopicModal(_familyId, user, topic);
-        });
-
-        card.querySelector('[data-action="export"]')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const topics = store.get('schoolTopics') || [];
-            const topic = topics.find(tp => tp.id === topicId);
-            if (!topic) return;
-            exportTopic(topic);
-        });
-    });
-
-    // Wire comment form if expanded
-    if (_expandedTopicId) wireCommentFormEvents(_expandedTopicId);
-
-    // Wire question form if expanded
-    if (_expandedTopicId) wireQuestionFormEvents(_expandedTopicId);
-
-    // Add topic button
-    _container.querySelector('#school-add-topic-btn')?.addEventListener('click', async () => {
+    menu.querySelector('#spm-add')?.addEventListener('click', async () => {
         const { showTopicModal } = await import('../modals/topic-modal.js');
         showTopicModal(_familyId, user);
     });
-
-    // Seed topics button
-    _container.querySelector('#school-seed-topics-btn')?.addEventListener('click', async () => {
+    menu.querySelector('#spm-seed')?.addEventListener('click', async () => {
         if (!confirm(t.school.seedTopicsConfirm)) return;
-        const btn = _container.querySelector('#school-seed-topics-btn');
-        if (btn) btn.disabled = true;
-        try {
-            const createdByName = user?.role === 'manager'
-                ? (store.get('family')?.family_name || t.school.parent)
-                : (user?.kidName || t.school.kid);
-            await schoolService.seedDefaultTopics(_familyId, createdByName);
-        } catch (err) {
-            console.error(err);
-            alert(t.school.seedTopicsError);
-            if (btn) btn.disabled = false;
-        }
+        const name = user?.role === 'manager'
+            ? (store.get('family')?.family_name || t.school.parent)
+            : (user?.kidName || t.school.kid);
+        try { await schoolService.seedDefaultTopics(_familyId, name); }
+        catch { alert(t.school.seedTopicsError); }
     });
-
-    // Export all button
-    _container.querySelector('#school-export-all-btn')?.addEventListener('click', () => {
-        const topics = store.get('schoolTopics') || [];
-        if (topics.length === 0) return;
-        exportAllTopics(topics);
-    });
-
-    // Import button
-    _container.querySelector('#school-import-btn')?.addEventListener('click', async () => {
+    menu.querySelector('#spm-import')?.addEventListener('click', async () => {
         const { showImportModal } = await import('../modals/import-modal.js');
         showImportModal(_familyId, user);
     });
-
-    // Quiz interactions
-    _container.querySelectorAll('.topic-quiz').forEach(quizEl => {
-        wireQuizEvents(quizEl, quizEl.dataset.quizTopicId);
+    menu.querySelector('#spm-export')?.addEventListener('click', () => {
+        const topics = store.get('schoolTopics') || [];
+        if (!topics.length) return;
+        exportAllTopics(topics);
     });
+}
 
-    // Game interactions
-    _container.querySelectorAll('.topic-game').forEach(gameEl => {
-        wireGameEvents(gameEl, gameEl.dataset.gameTopicId);
+function exportAllTopics(topics) {
+    const data = topics.map(topic => {
+        const obj = { title: topic.title, category: topic.category, content: topic.content || '', status: topic.status || 'published' };
+        if (topic.quiz?.length) obj.quiz = topic.quiz;
+        if (topic.game?.pairs?.length) obj.game = topic.game;
+        return obj;
     });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'school-topics.json'; a.click();
+    URL.revokeObjectURL(url);
 }
 
 function wireQuizEvents(quizEl, topicId) {
@@ -520,9 +695,14 @@ function wireQuizEvents(quizEl, topicId) {
             const topics = store.get('schoolTopics') || [];
             const topic = topics.find(tp => tp.id === topicId);
             if (topic) {
-                const newQuizHtml = renderQuiz(topic);
+                const state = _quizState[topicId];
+                const allAnswered = Object.keys(state).length === topic.quiz.length;
+                if (allAnswered && _familyId && _userId) {
+                    schoolService.markQuizDone(_familyId, _userId, topicId).catch(() => {});
+                }
+                const newHtml = renderQuiz(topic);
                 const tmp = document.createElement('div');
-                tmp.innerHTML = newQuizHtml;
+                tmp.innerHTML = newHtml;
                 quizEl.replaceWith(tmp.firstElementChild);
                 const newEl = _container?.querySelector(`.topic-quiz[data-quiz-topic-id="${CSS.escape(topicId)}"]`);
                 if (newEl) wireQuizEvents(newEl, topicId);
@@ -535,9 +715,9 @@ function wireQuizEvents(quizEl, topicId) {
         const topics = store.get('schoolTopics') || [];
         const topic = topics.find(tp => tp.id === topicId);
         if (topic) {
-            const newQuizHtml = renderQuiz(topic);
+            const newHtml = renderQuiz(topic);
             const tmp = document.createElement('div');
-            tmp.innerHTML = newQuizHtml;
+            tmp.innerHTML = newHtml;
             quizEl.replaceWith(tmp.firstElementChild);
             const newEl = _container?.querySelector(`.topic-quiz[data-quiz-topic-id="${CSS.escape(topicId)}"]`);
             if (newEl) wireQuizEvents(newEl, topicId);
@@ -553,7 +733,6 @@ function wireGameEvents(gameEl, topicId) {
     const state = _gameState[topicId];
     if (!state) return;
 
-    // Retry
     gameEl.querySelector(`[data-game-retry]`)?.addEventListener('click', () => {
         const n = pairs.length;
         _gameState[topicId] = { selected: null, matched: new Set(), shuffledDefs: [...Array(n).keys()].sort(() => Math.random() - 0.5) };
@@ -565,22 +744,16 @@ function wireGameEvents(gameEl, topicId) {
         if (newEl) wireGameEvents(newEl, topicId);
     });
 
-    // Term clicks
     gameEl.querySelectorAll('.game-term:not(.matched)').forEach(termEl => {
         termEl.addEventListener('click', () => {
             const ti = parseInt(termEl.dataset.ti, 10);
-            if (state.selected === ti) {
-                state.selected = null;
-                termEl.classList.remove('selected');
-                return;
-            }
+            if (state.selected === ti) { state.selected = null; termEl.classList.remove('selected'); return; }
             gameEl.querySelectorAll('.game-term.selected').forEach(el => el.classList.remove('selected'));
             state.selected = ti;
             termEl.classList.add('selected');
         });
     });
 
-    // Def clicks
     gameEl.querySelectorAll('.game-def:not(.matched)').forEach(defEl => {
         defEl.addEventListener('click', () => {
             if (state.selected === null) return;
@@ -594,6 +767,7 @@ function wireGameEvents(gameEl, topicId) {
                 selectedTermEl?.classList.add('matched');
                 defEl.classList.add('matched');
                 if (state.matched.size === pairs.length) {
+                    if (_familyId && _userId) schoolService.markGameDone(_familyId, _userId, topicId).catch(() => {});
                     const newHtml = renderGame(topic);
                     const tmp = document.createElement('div');
                     tmp.innerHTML = newHtml;
@@ -614,47 +788,6 @@ function wireGameEvents(gameEl, topicId) {
     });
 }
 
-function exportTopic(topic) {
-    const data = {
-        title:    topic.title,
-        category: topic.category,
-        content:  topic.content || '',
-        status:   topic.status || 'published',
-    };
-    if (topic.quiz?.length)       data.quiz = topic.quiz;
-    if (topic.game?.pairs?.length) data.game = topic.game;
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${topic.title.replace(/[^\w\u0590-\u05FF]/g, '_')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function exportAllTopics(topics) {
-    const data = topics.map(topic => {
-        const obj = {
-            title:    topic.title,
-            category: topic.category,
-            content:  topic.content || '',
-            status:   topic.status || 'published',
-        };
-        if (topic.quiz?.length)        obj.quiz = topic.quiz;
-        if (topic.game?.pairs?.length) obj.game = topic.game;
-        return obj;
-    });
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = 'school-topics.json';
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
 function wireCommentFormEvents(topicId) {
     const input = _container?.querySelector(`#comment-input-${CSS.escape(topicId)}`);
     const submit = _container?.querySelector(`#comment-submit-${CSS.escape(topicId)}`);
@@ -672,26 +805,17 @@ function wireCommentFormEvents(topicId) {
         try {
             await schoolService.addComment(_familyId, topicId, text, authorName);
             input.value = '';
-        } catch {
-            alert(t.school.commentError);
-        } finally {
-            submit.disabled = false;
-            input.focus();
-        }
+        } catch { alert(t.school.commentError); }
+        finally { submit.disabled = false; input.focus(); }
     };
 
     submit.addEventListener('click', doSubmit);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSubmit(); });
 
-    // Delete comment buttons
     _container?.querySelectorAll('.school-comment-delete').forEach(btn => {
         btn.addEventListener('click', async () => {
-            const commentId = btn.dataset.commentId;
-            try {
-                await schoolService.deleteComment(_familyId, topicId, commentId);
-            } catch {
-                alert(t.school.deleteError);
-            }
+            try { await schoolService.deleteComment(_familyId, topicId, btn.dataset.commentId); }
+            catch { alert(t.school.deleteError); }
         });
     });
 }
@@ -713,18 +837,13 @@ function wireQuestionFormEvents(topicId) {
         try {
             await schoolService.addQuestion(_familyId, topicId, text, authorName);
             input.value = '';
-        } catch {
-            alert(t.school.questionError);
-        } finally {
-            submit.disabled = false;
-            input.focus();
-        }
+        } catch { alert(t.school.questionError); }
+        finally { submit.disabled = false; input.focus(); }
     };
 
     submit.addEventListener('click', doSubmit);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSubmit(); });
 
-    // Answer forms (manager only)
     _container?.querySelectorAll('.answer-submit-btn').forEach(btn => {
         const qId = btn.dataset.questionId;
         const answerInput = btn.closest('.question-answer-form')?.querySelector('.answer-input');
@@ -733,38 +852,17 @@ function wireQuestionFormEvents(topicId) {
             const text = answerInput.value.trim();
             if (!text) return;
             btn.disabled = true;
-            try {
-                await schoolService.answerQuestion(_familyId, topicId, qId, text, authorName);
-            } catch {
-                alert(t.school.answerError);
-                btn.disabled = false;
-            }
+            try { await schoolService.answerQuestion(_familyId, topicId, qId, text, authorName); }
+            catch { alert(t.school.answerError); btn.disabled = false; }
         };
         btn.addEventListener('click', doAnswer);
         answerInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAnswer(); });
     });
 
-    // Delete question buttons
     _container?.querySelectorAll('.question-delete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-            try {
-                await schoolService.deleteQuestion(_familyId, topicId, btn.dataset.questionId);
-            } catch {
-                alert(t.school.deleteError);
-            }
+            try { await schoolService.deleteQuestion(_familyId, topicId, btn.dataset.questionId); }
+            catch { alert(t.school.deleteError); }
         });
     });
-}
-
-function renderCommentsPanel(cardEl) {
-    const topicId = cardEl.dataset.topicId;
-    const discussion = cardEl.querySelector(`#discussion-${CSS.escape(topicId)}`);
-    if (!discussion) return;
-    const user = store.get('user');
-    const topics = store.get('schoolTopics') || [];
-    const topic = topics.find(tp => tp.id === topicId);
-    if (topic) {
-        discussion.innerHTML = renderComments(topic, user?.role === 'manager', user);
-        wireCommentFormEvents(topicId);
-    }
 }

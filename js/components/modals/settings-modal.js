@@ -37,6 +37,11 @@ export function showSettingsModal() {
             <label for="cfg-monthly-income">${t.settings.monthlyIncomeLabel}</label>
             <input type="number" id="cfg-monthly-income" min="0" step="any" placeholder="${t.settings.monthlyIncomePlaceholder}" value="${family.monthly_income || ''}">
         </div>
+        <div class="form-group">
+            <label for="cfg-reward-tickers">${t.settings.rewardTickersLabel}</label>
+            <input type="text" id="cfg-reward-tickers" dir="ltr" placeholder="${t.settings.rewardTickersPlaceholder}" value="${esc((family.reward_eligible_tickers || []).join(', '))}">
+            <div class="form-hint">${t.settings.rewardTickersHint}</div>
+        </div>
         <div class="form-group settings-toggle-row">
             <label class="settings-toggle-label">
                 <input type="checkbox" id="cfg-chat-enabled" ${family.chatDisabled ? '' : 'checked'}>
@@ -62,6 +67,7 @@ export function showSettingsModal() {
                 currency_symbol: modal.querySelector('#cfg-currency').value.trim() || '₪',
                 matching_days: parseInt(modal.querySelector('#cfg-matching-days').value) || 365,
                 sp500_ticker: modal.querySelector('#cfg-sp500').value.trim(),
+                reward_eligible_tickers: modal.querySelector('#cfg-reward-tickers').value.split(',').map(s => s.trim()).filter(Boolean),
                 chatDisabled: !modal.querySelector('#cfg-chat-enabled').checked,
                 monthly_income: incomeVal ? parseFloat(incomeVal) : 0,
             });

@@ -180,6 +180,7 @@ async function _fetchPricesInner(silent) {
     store.set('exchangeRates', exchangeRates);
 
     if (prices.size > 0) {
+        store.set('priceLastUpdate', new Date().toISOString());
         const user = store.get('user');
         if (user?.familyId && user?.role === 'manager') {
             const { updatePrices } = await import('./investment-service.js');

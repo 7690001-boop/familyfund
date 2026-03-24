@@ -10,10 +10,10 @@ import {
     DEFAULT_AVATAR, renderAvatar,
     SKIN_COLORS, EYE_COLORS, HAIR_COLORS, BG_COLORS,
     FACE_SHAPE_OPTIONS, EYES_OPTIONS, EYEBROW_OPTIONS, MOUTH_OPTIONS,
-    HAIR_OPTIONS, ACCESSORY_OPTIONS, GLASSES_OPTIONS,
+    HAIR_OPTIONS, ACCESSORY_OPTIONS, GLASSES_OPTIONS, SHOULDERS_OPTIONS,
     LABELS,
     FACE_SHAPE_LABELS, EYES_LABELS, EYEBROW_LABELS, MOUTH_LABELS,
-    HAIR_LABELS, ACCESSORY_LABELS, GLASSES_LABELS,
+    HAIR_LABELS, ACCESSORY_LABELS, GLASSES_LABELS, SHOULDERS_LABELS,
 } from '../ui/avatar.js';
 import t from '../../i18n.js';
 
@@ -152,6 +152,10 @@ export function showAvatarModal(kidName, currentAvatar) {
                     ${colorPicker('pick-hair-color', HAIR_COLORS, draft.hairColor)}
                 </div>
                 <div class="avatar-section">
+                    <label>${LABELS.shoulders}</label>
+                    ${optionPicker('pick-shoulders', SHOULDERS_OPTIONS, SHOULDERS_LABELS, draft.shoulders || 'none')}
+                </div>
+                <div class="avatar-section">
                     <label>${LABELS.accessories} <span class="avatar-hint">${t.avatar.multiHint}</span></label>
                     ${multiOptionPicker('pick-accessories', ACCESSORY_OPTIONS, ACCESSORY_LABELS, draft.accessories)}
                 </div>
@@ -202,6 +206,7 @@ export function showAvatarModal(kidName, currentAvatar) {
     wireOptions('pick-mouth', 'mouth');
     wireOptions('pick-hair', 'hair');
     wireOptions('pick-glasses', 'glasses');
+    wireOptions('pick-shoulders', 'shoulders');
 
     // Wire multi-select accessories (toggle on/off)
     modal.querySelector('#pick-accessories')?.addEventListener('click', (e) => {
@@ -252,6 +257,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             glasses: pick(GLASSES_OPTIONS),
             freckles: Math.random() > 0.7,
             bgColor: pick(BG_COLORS),
+            shoulders: pick(SHOULDERS_OPTIONS),
         };
         rebuildControls();
         preview();
@@ -279,6 +285,7 @@ export function showAvatarModal(kidName, currentAvatar) {
         updateOptionActive('pick-mouth', draft.mouth);
         updateOptionActive('pick-hair', draft.hair);
         updateOptionActive('pick-glasses', draft.glasses);
+        updateOptionActive('pick-shoulders', draft.shoulders || 'none');
         // Multi-select accessories
         modal.querySelectorAll('#pick-accessories .avatar-multi-btn').forEach(b => {
             b.classList.toggle('active', draft.accessories.includes(b.dataset.value));

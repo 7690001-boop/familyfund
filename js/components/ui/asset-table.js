@@ -6,7 +6,7 @@ import { formatCurrency, formatPct, formatDate, currencySymbol } from '../../uti
 import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import * as store from '../../store.js';
-import { aggregateByTicker } from '../../utils/compute.js';
+import { aggregateByTicker, getRewardMilestone } from '../../utils/compute.js';
 import t from '../../i18n.js';
 
 let _currentSort = { key: 'purchase_date', dir: 'desc' };
@@ -47,12 +47,9 @@ export function render(container, investments, options = {}) {
             canRequestBuy = false, canRequestSell = false, canSell = false,
             canAddCash = false, canConvert = false,
             onAdd, onEdit, onDelete, onToggleHidden, onRequestBuy, onRequestSell,
-            onSell, onAddCash, onConvert } = options;
+            onSell, onAddCash, onConvert, onRowClick } = options;
     const family = store.get('family') || {};
     const ilsSym = family.currency_symbol || '₪';
-
-    // Are there any non-ILS investments? If so, show native columns.
-    const hasFx = investments.some(inv => (inv.currency || 'ILS') !== 'ILS');
 
     if (investments.length === 0) {
         container.innerHTML = `
@@ -91,9 +88,6 @@ export function render(container, investments, options = {}) {
         return;
     }
 
-    let actionsHeader = '';
-    if (canEdit || canToggleHidden || canRequestSell || canSell) actionsHeader = `<th>${t.assets.headerActions}</th>`;
-
     // Keep original for re-sort; work with sorted copy
     const originalInvestments = investments;
     investments = sortInvestments(investments, _currentSort.key, _currentSort.dir);
@@ -104,7 +98,6 @@ export function render(container, investments, options = {}) {
     let consolidatedHtml = '';
 
     if (hasMultiPurchase) {
-        const posFx = positions.some(p => (p.currency || 'ILS') !== 'ILS');
         let posRows = '';
         positions.forEach(pos => {
             const currency = pos.currency || 'ILS';
@@ -112,10 +105,6 @@ export function render(container, investments, options = {}) {
             const isFx = currency !== 'ILS';
             const natDec = isFx ? 2 : 0;
             const glClass = cellGainLossClass(pos.gainLossILS);
-
-            const avgCell = pos.avgCostNative != null
-                ? `<span dir="ltr">${nativeSym}${pos.avgCostNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
-                : '—';
 
             const priceCell = pos.currentPrice != null
                 ? `<span dir="ltr">${nativeSym}${pos.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
@@ -129,56 +118,82 @@ export function render(container, investments, options = {}) {
                 }
             }
 
+            // P&L + % merged into one cell
             let plCell = '—';
-            let plPctCell = '—';
             if (pos.gainLossNative != null) {
                 plCell = `<span class="cell-line-main">${formatCurrency(pos.gainLossNative, nativeSym, natDec)}</span>`;
                 if (isFx && pos.gainLossILS != null) {
                     plCell += `<span class="cell-line-sub">${formatCurrency(pos.gainLossILS, ilsSym)}</span>`;
                 }
-                plPctCell = formatPct(pos.gainLossPctILS);
+                plCell += `<span class="cell-line-sub">${formatPct(pos.gainLossPctILS)}</span>`;
             }
 
+            // Invested + avg cost per unit in one cell
             let investedCell = formatCurrency(pos.totalInvested, ilsSym);
             if (isFx && pos.totalInvestedNative > 0) {
                 investedCell = `<span class="cell-line-main">${formatCurrency(pos.totalInvested, ilsSym)}</span>`
                     + `<span class="cell-line-sub">${formatCurrency(pos.totalInvestedNative, nativeSym, natDec)}</span>`;
+            }
+            if (pos.avgCostNative != null) {
+                investedCell += `<span class="cell-line-sub">${t.assets.perUnit}: ${nativeSym}${pos.avgCostNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
             }
 
             const countBadge = pos.purchaseCount > 1
                 ? ` <span class="cell-line-sub">${t.assets.purchaseCount(pos.purchaseCount)}</span>` : '';
             const posHiddenBadge = showHiddenBadge && pos.someHidden
                 ? ` <span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
-            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}</span><span class="cell-line-sub asset-ticker">${esc(pos.ticker || '')}</span>${countBadge}`;
+            // Ticker + currency under the name
+            const tickerLine = pos.ticker ? `<span class="cell-line-sub asset-ticker">${esc(pos.ticker)}${isFx ? ` · ${esc(currency)}` : ''}</span>` : '';
+            const noteDot = pos.note ? ' <span class="note-dot" title="יש הערה">📝</span>' : '';
+            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}${noteDot}</span>${tickerLine}${countBadge}`;
 
-            posRows += `<tr${pos.someHidden ? ' class="asset-row-hidden"' : ''}>
+            // Actions on consolidated row
+            const isCash = (pos.ticker || '').toUpperCase() === 'CASH' || (pos.asset_name || '').includes('מזומן');
+            let posActionsCol = '';
+            if (canEdit || canToggleHidden || canRequestSell || canSell) {
+                const hideBtn = canToggleHidden && pos.firstId
+                    ? `<button class="btn btn-ghost toggle-hidden-btn" data-id="${esc(pos.firstId)}" data-hidden="${!!pos.someHidden}" title="${pos.someHidden ? 'הצג במבט המשפחה' : 'הסתר ממבט המשפחה'}">${pos.someHidden ? '👁' : '🙈'}</button>`
+                    : '';
+                const editDeleteBtns = canEdit && pos.firstId
+                    ? `<button class="btn btn-ghost edit-inv-btn" data-id="${esc(pos.firstId)}" title="${t.common.edit}"${isCash ? ' style="display:none"' : ''}>✎</button>
+                    <button class="btn btn-ghost danger del-inv-btn" data-id="${esc(pos.firstId)}" title="${t.common.delete}">✕</button>`
+                    : '';
+                const sellBtn = canSell && pos.firstId && !isCash
+                    ? `<button class="btn btn-ghost sell-inv-btn" data-id="${esc(pos.firstId)}" title="${t.cash.sellTitle}" style="font-size:0.78rem">📉</button>`
+                    : '';
+                const reqSellBtn = canRequestSell && pos.firstId && !isCash
+                    ? `<button class="btn btn-ghost req-sell-btn" data-id="${esc(pos.firstId)}" title="${t.investmentRequest.requestSellBtn}" style="font-size:0.78rem">📤</button>`
+                    : '';
+                posActionsCol = `<td class="cell-actions">${hideBtn}${reqSellBtn}${sellBtn}${editDeleteBtns}</td>`;
+            }
+
+            posRows += `<tr class="pos-row${pos.someHidden ? ' asset-row-hidden' : ''}" data-pos-id="${esc(pos.firstId || '')}">
                 <td>${nameCell}</td>
-                ${posFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
                 <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td>
                 <td class="cell-number">${investedCell}</td>
-                <td class="cell-number">${avgCell}</td>
                 <td class="cell-number">${priceCell}</td>
                 <td class="cell-number">${valueCell}</td>
                 <td class="cell-number ${glClass}">${plCell}</td>
-                <td class="cell-number ${glClass}">${plPctCell}</td>
+                ${posActionsCol}
             </tr>`;
         });
 
+        let posActionsHeader = '';
+        if (canEdit || canToggleHidden || canRequestSell || canSell) posActionsHeader = `<th>${t.assets.headerActions}</th>`;
+
         consolidatedHtml = `
-            <h3 class="section-sub-header">${t.assets.consolidatedTitle}</h3>
+            <h3 class="section-sub-header has-tip" title="${t.assets.tipConsolidated}">${t.assets.consolidatedTitle}</h3>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>${t.assets.headerAsset}</th>
-                            ${posFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
-                            <th>${t.assets.headerShares}</th>
-                            <th>${t.assets.headerInvested}</th>
-                            <th>${t.assets.headerAvgCost}</th>
-                            <th>${t.assets.headerCurrentPrice}</th>
-                            <th>${t.assets.headerCurrentValue}</th>
-                            <th>${t.assets.headerGainLoss}</th>
-                            <th>${t.assets.headerPct}</th>
+                            <th title="${t.assets.tipAsset}">${t.assets.headerAsset}</th>
+                            <th title="${t.assets.tipShares}">${t.assets.headerShares}</th>
+                            <th title="${t.assets.tipInvested}">${t.assets.headerInvested}</th>
+                            <th title="${t.assets.tipCurrentPrice}">${t.assets.headerCurrentPrice}</th>
+                            <th title="${t.assets.tipCurrentValue}">${t.assets.headerCurrentValue}</th>
+                            <th title="${t.assets.tipGainLoss}">${t.assets.headerGainLoss}</th>
+                            ${posActionsHeader}
                         </tr>
                     </thead>
                     <tbody>${posRows}</tbody>
@@ -193,29 +208,7 @@ export function render(container, investments, options = {}) {
         const currency = inv.currency || 'ILS';
         const nativeSym = currencySymbol(currency);
         const isFx = currency !== 'ILS';
-        // Color based on ILS gain/loss (home currency perspective)
         const glClass = cellGainLossClass(inv.gainLossILS);
-
-        const isCash = inv.type === 'cash';
-        let actionsCol = '';
-        if (canEdit || canToggleHidden || canRequestSell || canSell) {
-            const hideBtn = canToggleHidden
-                ? `<button class="btn btn-ghost toggle-hidden-btn" data-id="${esc(inv.id)}" data-hidden="${!!inv.hidden}" title="${inv.hidden ? 'הצג במבט המשפחה' : 'הסתר ממבט המשפחה'}">${inv.hidden ? '👁' : '🙈'}</button>`
-                : '';
-            const editDeleteBtns = canEdit
-                ? `<button class="btn btn-ghost edit-inv-btn" data-id="${esc(inv.id)}" title="${t.common.edit}"${isCash ? ' style="display:none"' : ''}>✎</button>
-                <button class="btn btn-ghost danger del-inv-btn" data-id="${esc(inv.id)}" title="${t.common.delete}">✕</button>`
-                : '';
-            // Sell button only for non-cash securities
-            const sellBtn = canSell && !isCash
-                ? `<button class="btn btn-ghost sell-inv-btn" data-id="${esc(inv.id)}" title="${t.cash.sellTitle}" style="font-size:0.78rem">📉</button>`
-                : '';
-            // Sell-request button only for non-cash securities (member role)
-            const reqSellBtn = canRequestSell && !isCash
-                ? `<button class="btn btn-ghost req-sell-btn" data-id="${esc(inv.id)}" title="${t.investmentRequest.requestSellBtn}" style="font-size:0.78rem">📤</button>`
-                : '';
-            actionsCol = `<td class="cell-actions">${hideBtn}${reqSellBtn}${sellBtn}${editDeleteBtns}</td>`;
-        }
 
         // Current price cell — always in native currency
         const priceCell = inv.currentPrice != null
@@ -232,48 +225,57 @@ export function render(container, investments, options = {}) {
             }
         }
 
-        // P&L cell — native as main line, ILS as sub-line for FX
-        // % uses ILS-based return (home currency perspective)
+        // P&L + % merged into one cell
         let plCell = '—';
-        let plPctCell = '—';
         if (inv.gainLossNative != null) {
             plCell = `<span class="cell-line-main">${formatCurrency(inv.gainLossNative, nativeSym, natDec)}</span>`;
             if (isFx && inv.gainLossILS != null) {
                 plCell += `<span class="cell-line-sub">${formatCurrency(inv.gainLossILS, ilsSym)}</span>`;
             }
-            // % is ILS-based so it's consistent with cell color
-            plPctCell = formatPct(inv.gainLossPctILS);
+            plCell += `<span class="cell-line-sub">${formatPct(inv.gainLossPctILS)}</span>`;
         }
 
-        // Invested cell — always ILS, but show native sub-line if FX
+        // Invested cell — always ILS, but show native sub-line if FX, plus per-unit cost
         let investedCell = formatCurrency(inv.amountInvested, ilsSym);
         if (isFx && inv.amountInvestedNative != null && inv.amountInvestedNative > 0) {
             investedCell = `<span class="cell-line-main">${formatCurrency(inv.amountInvested, ilsSym)}</span>`
                 + `<span class="cell-line-sub">${formatCurrency(inv.amountInvestedNative, nativeSym, natDec)}</span>`;
         }
+        // Show per-unit cost
+        if (typeof inv.shares === 'number' && inv.shares > 0) {
+            const costPerUnit = (inv.amountInvestedNative != null && inv.amountInvestedNative > 0)
+                ? inv.amountInvestedNative / inv.shares
+                : inv.amountInvested / inv.shares;
+            const costSym = (inv.amountInvestedNative != null && inv.amountInvestedNative > 0) ? nativeSym : ilsSym;
+            investedCell += `<span class="cell-line-sub">${t.assets.perUnit}: ${costSym}${costPerUnit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
+        }
 
+        const isCash = inv.type === 'cash';
         const hiddenBadgeHtml = showHiddenBadge && inv.hidden
             ? `<span class="hidden-asset-badge">👁 ${t.assets.hiddenBadge}</span>` : '';
         const cashBadgeHtml = isCash
             ? `<span class="cash-type-badge">💵 ${t.cash.cashLabel}</span>` : '';
+        const milestone = getRewardMilestone(inv, family);
+        const rewardBadgeHtml = milestone
+            ? `<span class="holding-reward-badge reward-${milestone.level}" title="${t.holdingReward.daysHeld(milestone.days)}">${milestone.icon} ${t.holdingReward[milestone.level]}</span>` : '';
         const sharesFormatted = typeof inv.shares === 'number'
             ? inv.shares.toLocaleString('en-US', { maximumFractionDigits: 2 })
             : (inv.shares || '—');
+        // Ticker + currency under the name
+        const tickerSub = inv.ticker ? `<span class="cell-line-sub asset-ticker">${esc(inv.ticker)}${isFx ? ` · ${esc(currency)}` : ''}</span>` : '';
+        const noteDot = inv.note ? ' <span class="note-dot" title="יש הערה">📝</span>' : '';
         const nameCell = inv.nickname
-            ? `<span class="cell-line-main">${esc(inv.nickname)}${cashBadgeHtml}${hiddenBadgeHtml}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`
-            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${cashBadgeHtml}${hiddenBadgeHtml}</span><span class="cell-line-sub asset-ticker">${esc(inv.ticker || '')}</span>`;
+            ? `<span class="cell-line-main">${esc(inv.nickname)}${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span>${tickerSub}`
+            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span>${tickerSub}`;
 
         rows += `<tr${inv.hidden ? ' class="asset-row-hidden"' : ''}>
             <td>${nameCell}</td>
-            ${hasFx ? `<td class="cell-currency-badge"><span class="currency-badge">${esc(currency)}</span></td>` : ''}
             <td>${formatDate(inv.purchase_date)}</td>
             <td class="cell-number">${sharesFormatted}</td>
             <td class="cell-number">${investedCell}</td>
             <td class="cell-number">${priceCell}</td>
             <td class="cell-number">${valueCell}</td>
             <td class="cell-number ${glClass}">${plCell}</td>
-            <td class="cell-number ${glClass}">${plPctCell}</td>
-            ${actionsCol}
         </tr>`;
     });
 
@@ -283,7 +285,6 @@ export function render(container, investments, options = {}) {
         { key: 'amount_invested', label: t.assets.sortInvested },
         { key: 'current_value', label: t.assets.sortValue },
         { key: 'gain_loss', label: t.assets.sortGainLoss },
-        { key: 'gain_loss_pct', label: t.assets.headerPct },
     ];
     const sortBarHtml = sortOptions.map(o => {
         const active = _currentSort.key === o.key;
@@ -295,7 +296,6 @@ export function render(container, investments, options = {}) {
         <div class="section-header">
             <h2>${t.assets.title}</h2>
             <div class="section-actions">
-                <button class="btn btn-small btn-secondary fetch-prices-btn">${t.assets.updatePrices}</button>
                 ${canConvert ? `<button class="btn btn-small btn-secondary convert-btn">${t.cash.convertCurrencyBtn}</button>` : ''}
                 ${canAddCash ? `<button class="btn btn-small btn-secondary add-cash-btn">${t.cash.addCashBtn}</button>` : ''}
                 ${canRequestBuy ? `<button class="btn btn-small btn-primary req-buy-btn">${t.investmentRequest.requestBuyBtn}</button>` : ''}
@@ -304,21 +304,18 @@ export function render(container, investments, options = {}) {
         </div>
         <div class="sort-bar"><span class="sort-label">${t.assets.sortLabel}</span> ${sortBarHtml}</div>
         ${consolidatedHtml}
-        ${hasMultiPurchase ? `<h3 class="section-sub-header">${t.assets.transactionsTitle}</h3>` : ''}
+        ${hasMultiPurchase ? `<h3 class="section-sub-header has-tip" title="${t.assets.tipTransactions}">${t.assets.transactionsTitle}</h3>` : ''}
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>${t.assets.headerAsset}</th>
-                        ${hasFx ? `<th>${t.assets.headerCurrency}</th>` : ''}
-                        <th>${t.assets.headerDate}</th>
-                        <th>${t.assets.headerShares}</th>
-                        <th>${t.assets.headerInvested}</th>
-                        <th>${t.assets.headerCurrentPrice}</th>
-                        <th>${t.assets.headerCurrentValue}</th>
-                        <th>${t.assets.headerGainLoss}</th>
-                        <th>${t.assets.headerPct}</th>
-                        ${actionsHeader}
+                        <th title="${t.assets.tipAsset}">${t.assets.headerAsset}</th>
+                        <th title="${t.assets.tipDate}">${t.assets.headerDate}</th>
+                        <th title="${t.assets.tipShares}">${t.assets.headerShares}</th>
+                        <th title="${t.assets.tipInvested}">${t.assets.headerInvested}</th>
+                        <th title="${t.assets.tipCurrentPrice}">${t.assets.headerCurrentPrice}</th>
+                        <th title="${t.assets.tipCurrentValue}">${t.assets.headerCurrentValue}</th>
+                        <th title="${t.assets.tipGainLoss}">${t.assets.headerGainLoss}</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -377,14 +374,6 @@ export function render(container, investments, options = {}) {
         if (convertBtn) convertBtn.addEventListener('click', onConvert);
     }
 
-    const fetchBtn = container.querySelector('.fetch-prices-btn');
-    if (fetchBtn) {
-        fetchBtn.addEventListener('click', async () => {
-            const { fetchPrices } = await import('../../services/price-service.js');
-            fetchPrices(false);
-        });
-    }
-
     // Sort buttons
     container.querySelectorAll('.sort-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -397,4 +386,18 @@ export function render(container, investments, options = {}) {
             render(container, originalInvestments, options);
         });
     });
+
+    // Row click → open detail modal (same as heatmap)
+    if (onRowClick) {
+        container.querySelectorAll('.pos-row').forEach(row => {
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', (e) => {
+                // Don't trigger if clicking an action button
+                if (e.target.closest('.cell-actions')) return;
+                const posId = row.dataset.posId;
+                const pos = positions.find(p => p.firstId === posId);
+                if (pos) onRowClick(pos);
+            });
+        });
+    }
 }

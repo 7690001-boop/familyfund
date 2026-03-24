@@ -20,9 +20,26 @@ const JARS = {
         <rect x="20" y="5" width="16" height="7" rx="3.5" fill="#ff8fab"/>
         <rect x="13" y="10" width="30" height="10" rx="5" fill="#ffb3c6"/>
         <rect x="10" y="18" width="36" height="43" rx="11" fill="#dfe6e9" stroke="#b2bec3" stroke-width="1.5"/>
-        <ellipse cx="28" cy="51" rx="13" ry="5" fill="#fdcb6e" opacity="0.65"/>
-        <ellipse cx="28" cy="45" rx="13" ry="5" fill="#fdcb6e"/>
-        <ellipse cx="28" cy="39" rx="13" ry="5" fill="#f0d060" opacity="0.85"/>
+        <!-- dollar bill, leaning slightly left -->
+        <g transform="rotate(-6, 19, 38)">
+            <rect x="13" y="23" width="12" height="30" rx="2" fill="#c3f0cb" stroke="#00b894" stroke-width="1"/>
+            <text x="19" y="41" text-anchor="middle" font-size="9" font-weight="bold" fill="#00b894" font-family="sans-serif">$</text>
+        </g>
+        <!-- stock document with mini chart, upright center -->
+        <g transform="rotate(3, 27, 36)">
+            <rect x="21" y="23" width="12" height="24" rx="1.5" fill="white" stroke="#b2bec3" stroke-width="1"/>
+            <line x1="23" y1="28" x2="31" y2="28" stroke="#74b9ff" stroke-width="1"/>
+            <line x1="23" y1="31" x2="31" y2="31" stroke="#74b9ff" stroke-width="1"/>
+            <polyline points="23,38 25,34 28,36 31,30" stroke="#2ecc71" stroke-width="1.2" fill="none"/>
+        </g>
+        <!-- shekel bill, leaning slightly right -->
+        <g transform="rotate(7, 36, 38)">
+            <rect x="30" y="23" width="12" height="30" rx="2" fill="#d5c8f5" stroke="#6c5ce7" stroke-width="1"/>
+            <text x="36" y="41" text-anchor="middle" font-size="9" font-weight="bold" fill="#6c5ce7" font-family="sans-serif">₪</text>
+        </g>
+        <!-- one coin at bottom -->
+        <ellipse cx="28" cy="57" rx="11" ry="3.5" fill="#fdcb6e"/>
+        <ellipse cx="28" cy="55" rx="11" ry="3.5" fill="#f0d060"/>
         <path d="M16 23 Q20 20 23 24" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.45"/>
         <rect x="25" y="11" width="6" height="4" rx="2" fill="#2d3436" opacity="0.2"/>
     </svg>`,

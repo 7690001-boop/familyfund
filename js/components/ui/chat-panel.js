@@ -154,17 +154,19 @@ function render() {
         }
     }
 
-    _container.innerHTML = `
-        <div class="chat-panel${_collapsed ? ' collapsed' : ''}">
+    _container.classList.toggle('collapsed', _collapsed);
+
+    if (_collapsed) {
+        _container.innerHTML = `<button class="chat-collapse-handle" id="chat-handle-btn" title="${t.chat.toggleOpen}"><span class="chat-handle-icon">💬</span><span class="chat-handle-arrow">›</span></button>`;
+    } else {
+        _container.innerHTML = `<div class="chat-panel">
             <div class="chat-panel-header">
-                <button class="chat-toggle-btn" id="chat-toggle" title="${_collapsed ? t.chat.toggleOpen : t.chat.toggleClose}">
-                    <span class="chat-toggle-icon">${_collapsed ? '💬' : '✕'}</span>
-                </button>
-                ${!_collapsed ? `<h3 class="chat-title">${t.chat.title}</h3>` : ''}
+                <h3 class="chat-title">${t.chat.title}</h3>
             </div>
-            ${!_collapsed ? `<div class="chat-body" id="chat-body">${bodyHtml}</div>` : ''}
+            <div class="chat-body" id="chat-body">${bodyHtml}</div>
         </div>
-    `;
+        <button class="chat-collapse-handle" id="chat-handle-btn" title="${t.chat.toggleClose}">‹</button>`;
+    }
 
     wireEvents();
 }
@@ -452,13 +454,10 @@ function wireMessageActions(messagesEl) {
 function wireEvents() {
     if (!_container) return;
 
-    const toggleBtn = _container.querySelector('#chat-toggle');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            _collapsed = !_collapsed;
-            render();
-        });
-    }
+    _container.querySelector('#chat-handle-btn')?.addEventListener('click', () => {
+        _collapsed = !_collapsed;
+        render();
+    });
 
     // New topic: show inline form
     const newTopicBtn = _container.querySelector('#new-topic-btn');

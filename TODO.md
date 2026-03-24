@@ -2,53 +2,14 @@
 
 ## Phases
 
-- **Phase 1 — Core Enhancements** (high value, low complexity)
 - **Phase 2 — Engagement & Gamification** (kid-facing features)
-- **Phase 3 — Analytics & Reporting** (data, exports, email)
-- **Phase 4 — Advanced Features** (AI, matching, notifications)
+- **Phase 3 — Analytics & Reporting** (data, exports, charts)
+- **Phase 4 — Advanced Features** (AI, notifications)
 - **Phase 5 — Platform & Infrastructure** (PWA, performance, accessibility)
 
 ---
 
-## Phase 1 — Core Enhancements
-
-### 1.1 Market Ticker Banner
-- Top banner showing live market data: USD/ILS, S&P 500, Nasdaq 100
-- Daily change % with color coding (green / red)
-- Data via existing Cloudflare Worker (Yahoo Finance proxy)
-- Auto-refresh every few minutes, visible to all users
-
-### 1.2 Family Announcement Banner
-- Manager posts pinned announcements visible to all family members
-- Create, edit, delete, optional expiry date
-- Members can dismiss per-session
-- Firestore: `families/{id}/announcements`
-
-### 1.3 Bills & Expenses Display
-- Track recurring bills alongside income (housing, utilities, subscriptions, etc.)
-- Manager adds/edits family bills
-- Dashboard shows net cash flow: income − bills
-- Firestore: `families/{id}/bills`
-
-### 1.4 Manual "Refresh Prices Now" Button
-- Currently prices auto-refresh; add a manual trigger in the UI
-- Useful after market open or after adding a new holding
-
-### 1.5 Duplicate Investment Warning
-- Warn manager when adding a ticker that already exists as a separate position
-- Suggest consolidating or confirm intentional separate lot
-
----
-
 ## Phase 2 — Engagement & Gamification
-
-### 2.1 Long-Term Holding Reward Indicator
-- Visual badge for kids holding an index fund long-term
-- Milestones: 1 month → 3 months → 6 months → 1 year → 2 years
-- Progression metaphor: seedling → sapling → tree
-- Animated sparkle/glow on the asset row at each milestone
-- Eligible tickers configurable by manager (default: S&P 500, World Index)
-- Counter: "החזקת את זה X ימים — המשך כך!"
 
 ### 2.2 Achievement Badges
 - Earn badges for milestones:
@@ -65,12 +26,6 @@
 - Display streak counter with flame icon
 - Break = streak resets; manager can grant a "freeze" to protect a streak
 
-### 2.4 Finance Quiz (School Section)
-- Short multiple-choice quizzes attached to school topics
-- Score tracking per member
-- Manager can create quizzes; kids earn a checkmark on completion
-- Leaderboard within family (optional, manager can hide)
-
 ### 2.5 Goal Categories
 - Tag goals with a category: חופשה / קולג' / גאדג'ט / חיסכון כללי / אחר
 - Filter and group goals by category
@@ -79,16 +34,6 @@
 ---
 
 ## Phase 3 — Analytics & Reporting
-
-### 3.1 Weekly Summary Email
-- Scheduled Cloud Function (every Sunday)
-- Excel report (.xlsx) per family:
-  - Portfolio snapshot per member
-  - Weekly gains/losses
-  - Savings goals progress
-  - Recent transactions
-- Sent to manager email via SendGrid or Firebase Email Extension
-- Backup copy stored in Firebase Storage
 
 ### 3.2 Portfolio Performance Over Time
 - Weekly snapshot of total portfolio value stored automatically
@@ -104,10 +49,6 @@
 - Optional: breakdown by currency (ILS vs. USD vs. other)
 - Shown on kid view and family view
 
-### 3.5 Per-Kid Excel/CSV Export
-- Export individual member data as Excel (not just full family JSON)
-- Useful for parents tracking each child separately
-
 ### 3.6 Annual Gains Summary
 - Year-end report: total gains/losses per member per year
 - Useful reference for Israeli tax reporting (Appendix B awareness)
@@ -115,13 +56,6 @@
 ---
 
 ## Phase 4 — Advanced Features
-
-### 4.1 Investment Matching for Long-Term Investments
-- Parent matches a % of eligible long-term investments
-- Configurable match period (default: 1 year lock-in) and match %
-- Eligible securities: S&P 500, World Index (manager-configurable)
-- Manager UI to set rules; member UI shows matching benefit upfront
-- Firestore: `families/{id}/matchRules`
 
 ### 4.2 AI Integration (Free Tier)
 - Options to evaluate:
@@ -177,27 +111,3 @@
 - Dismiss keyboard on form submit
 - Responsive heatmap font sizing
 - Touch-friendly drag handles in asset table
-
----
-
-## Community & Feedback
-
-### C.1 Roadmap Viewer (In-App)
-- Page showing all upcoming features with status: planned / in progress / done
-- Pulled from Firestore `appRoadmap` (admin-managed)
-- All users can see it — encourages transparency with kids
-
-### C.2 Feature Voting
-- Users vote on which user-facing features they want most
-- Each feature in the roadmap has an upvote button
-- Votes scoped per family (manager + members each get one vote per feature)
-- Admin sees vote totals across all families to prioritize development
-- Firestore: `appRoadmap/{featureId}/votes/{familyId}`
-- Display: vote count + "X families want this"
-
-### C.3 Suggestions Box
-- Any family member can submit a feature request or bug report
-- Form: title + description
-- Manager sees family submissions and can mark as noted/forwarded/done
-- Member sees status of their own submissions
-- Firestore: `families/{id}/suggestions`

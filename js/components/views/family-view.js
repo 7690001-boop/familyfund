@@ -195,30 +195,18 @@ function renderView() {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>${t.familyView.headerKid}</th>
-                            <th>${t.familyView.headerInvested}</th>
-                            <th>${t.familyView.headerCurrent}</th>
-                            <th>${t.familyView.headerGainLoss}</th>
-                            <th>${t.familyView.headerPct}</th>
-                            <th>${t.familyView.headerMatching}</th>
+                            <th title="${t.familyView.tipKid}">${t.familyView.headerKid}</th>
+                            <th title="${t.familyView.tipInvested}">${t.familyView.headerInvested}</th>
+                            <th title="${t.familyView.tipCurrent}">${t.familyView.headerCurrent}</th>
+                            <th title="${t.familyView.tipGainLoss}">${t.familyView.headerGainLoss}</th>
+                            <th title="${t.familyView.tipPct}">${t.familyView.headerPct}</th>
+                            <th title="${t.familyView.tipMatching}">${t.familyView.headerMatching}</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
                 </table>
             </div>
             ${anyHiddenVisible ? `<p class="partial-data-note">${t.familyView.partialNote}</p>` : ''}
-        </section>
-
-        <section class="section">
-            <h2>${t.familyView.matchingSummary}</h2>
-            <div class="matching-summary">
-                <div class="matching-summary-text">
-                    ${t.familyView.matchedTotal(formatCurrency(totalMatched, sym), formatCurrency(totalMatchable, sym))}
-                </div>
-                <div class="matching-progress-bar">
-                    <div class="matching-progress-fill" style="width:${matchPct * 100}%"></div>
-                </div>
-            </div>
         </section>
 
         ${renderBillsSection(family, sym, isManager)}

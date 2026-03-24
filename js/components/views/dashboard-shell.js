@@ -29,7 +29,7 @@ let _unsubs = [];
 let _activeTab = null;
 let _kidViewMod = null;
 let _familyViewMod = null;
-let _schoolViewMod = null;
+let _schoolPanelMod = null;
 let _chatPanelMod = null;
 let _tickerMod = null;
 let _renderTimer = null;
@@ -106,7 +106,7 @@ export function unmount() {
     _unsubs = [];
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
     if (_familyViewMod) { _familyViewMod.unmount(); _familyViewMod = null; }
-    if (_schoolViewMod) { _schoolViewMod.unmount(); _schoolViewMod = null; }
+    if (_schoolPanelMod) { _schoolPanelMod.unmount(); _schoolPanelMod = null; }
     if (_chatPanelMod) { _chatPanelMod.unmount(); _chatPanelMod = null; }
     if (_tickerMod) { _tickerMod.unmount(); _tickerMod = null; }
     announcementService.stopListening();
@@ -143,10 +143,13 @@ function renderShell() {
 
     let headerActions = '';
     const lastUpdate = store.get('priceLastUpdate');
+    headerActions += `<span class="price-group">`;
     if (lastUpdate) {
         const d = new Date(lastUpdate);
         headerActions += `<span class="price-status">${t.common.priceStatus(d.toLocaleTimeString('he-IL'))}</span>`;
     }
+    headerActions += `<button id="refresh-prices-btn" class="btn btn-icon btn-refresh-prices" title="${t.common.refreshPricesTitle}">↻</button>`;
+    headerActions += `</span>`;
 
     // "View as" dropdown for managers (always visible, even while impersonating)
     if (effectiveUser.role === 'manager' && kids.length > 0) {
@@ -172,13 +175,22 @@ function renderShell() {
         }
         if (can(effectiveUser, 'family:edit')) {
             headerActions += `<button id="announcements-btn" class="btn btn-small" title="${t.announcements.manageBtn}">${t.announcements.manageBtn}</button>`;
-            headerActions += `<button id="refresh-prices-btn" class="btn btn-icon" title="עדכן מחירים">↻</button>`;
         }
     }
     if (can(effectiveUser, 'feedback:send')) headerActions += `<button id="feedback-btn" class="btn btn-small" title="${t.feedback.title}">${t.dashboard.feedback}</button>`;
-    headerActions += `<button id="logout-btn" class="btn btn-icon" title="${t.setup.logout}">${t.dashboard.logout}</button>`;
 
     const members = store.get('members') || [];
+
+    if (isKidMode) {
+        const member = members.find(m => m.name === user.kidName);
+        const isPrivate = member?.private === true;
+        const isAutoPrivate = member?.autoPrivate === true;
+        const privacyLabel = isPrivate ? t.kidView.privateLabel : t.kidView.publicLabel;
+        const privacyTitle = isAutoPrivate ? t.kidView.autoPrivateHint : (isPrivate ? t.kidView.privateTitle : t.kidView.publicTitle);
+        headerActions += `<button id="privacy-toggle-btn" class="btn btn-small${isAutoPrivate ? ' disabled' : ''}" title="${privacyTitle}"${isAutoPrivate ? ' disabled' : ''}>${privacyLabel}</button>`;
+        headerActions += `<button id="change-password-btn" class="btn btn-small" title="${t.members.changePasswordTitle}">🔑 ${t.members.changePasswordBtn}</button>`;
+    }
+    headerActions += `<button id="logout-btn" class="btn btn-small" title="${t.setup.logout}">🚪 ${t.setup.logout}</button>`;
 
     let headerHtml;
     let tabsHtml = '';
@@ -226,8 +238,6 @@ function renderShell() {
             const familyActive = _activeTab === '__family__' ? ' active' : '';
             tabsHtml += `<button class="tab-btn tab-btn-family${familyActive}" data-kid="__family__">🏠 ${t.dashboard.familyTab}</button>`;
         }
-        const schoolActive = _activeTab === '__school__' ? ' active' : '';
-        tabsHtml += `<button class="tab-btn tab-btn-school${schoolActive}" data-kid="__school__">${t.school.tab}</button>`;
     } else {
         headerHtml = `
         <header class="app-header">
@@ -255,8 +265,6 @@ function renderShell() {
             const active = _activeTab === '__family__' ? ' active' : '';
             tabsHtml += `<button class="tab-btn${active}" data-kid="__family__">${t.dashboard.familyTab}</button>`;
         }
-        const schoolActive = _activeTab === '__school__' ? ' active' : '';
-        tabsHtml += `<button class="tab-btn tab-btn-school${schoolActive}" data-kid="__school__">${t.school.tab}</button>`;
     }
 
     // Build announcement banner
@@ -292,22 +300,29 @@ function renderShell() {
                 ` : ''}
                 <main id="view-container"></main>
             </div>
+            <aside class="school-panel-container${(_schoolPanelMod?.getState?.() ?? 'sidebar') === 'collapsed' ? ' collapsed' : (_schoolPanelMod?.getState?.() === 'expanded' ? ' expanded' : ' sidebar')}" id="school-panel-container"></aside>
         </div>
         <input type="file" id="import-file" accept=".json" hidden>
     `;
 
     wireShellEvents();
 
-    // Lazy-load and mount chat panel — fire-and-forget, never blocks dashboard
+    // Lazy-load and mount chat panel — fire-and-forget
     const chatContainer = _container.querySelector('#chat-panel-container');
     if (chatContainer) {
         mountChatPanel(chatContainer);
     }
 
-    if (_activeTab === '__school__') {
-        switchTab('__school__');
-    } else if (!_activeTab && user.role === 'manager') {
-        switchTab('__school__');
+    // Mount school panel — always present as sidebar
+    const schoolContainer = _container.querySelector('#school-panel-container');
+    if (schoolContainer) {
+        mountSchoolPanel(schoolContainer);
+    }
+
+    // Select initial tab (school is now a sidebar, not a tab)
+    const activeTabIsSchool = _activeTab === '__school__';
+    if (activeTabIsSchool || (!_activeTab && user.role === 'manager' && visibleKids.length > 0)) {
+        switchTab(visibleKids[0] || '__family__');
     } else if (visibleKids.length > 0 && (!_activeTab || !visibleKids.includes(_activeTab))) {
         switchTab(visibleKids[0]);
     } else if (_activeTab === '__family__') {
@@ -331,6 +346,21 @@ async function mountChatPanel(container) {
         console.error('Chat panel failed to load:', err);
     }
 }
+
+async function mountSchoolPanel(container) {
+    try {
+        if (!_schoolPanelMod) {
+            _schoolPanelMod = await import('./school-view.js');
+        }
+        const current = _container?.querySelector('#school-panel-container');
+        if (current) {
+            _schoolPanelMod.mount(current);
+        }
+    } catch (err) {
+        console.error('School panel failed to load:', err);
+    }
+}
+
 
 function wireShellEvents() {
     const user = store.get('user');
@@ -451,9 +481,12 @@ function wireShellEvents() {
     if (refreshPricesBtn) {
         refreshPricesBtn.addEventListener('click', async () => {
             refreshPricesBtn.disabled = true;
+            refreshPricesBtn.classList.add('spinning');
             try {
                 await priceService.fetchPrices(false);
+                updatePriceStatus();
             } finally {
+                refreshPricesBtn.classList.remove('spinning');
                 refreshPricesBtn.disabled = false;
             }
         });
@@ -464,6 +497,37 @@ function wireShellEvents() {
         feedbackBtn.addEventListener('click', async () => {
             const { showFeedbackModal } = await import('../modals/feedback-modal.js');
             showFeedbackModal();
+        });
+    }
+
+    const privacyToggleBtn = _container.querySelector('#privacy-toggle-btn');
+    if (privacyToggleBtn) {
+        privacyToggleBtn.addEventListener('click', async () => {
+            const user = store.get('user');
+            const members = store.get('members') || [];
+            const member = members.find(m => m.name === user.kidName);
+            if (!user?.familyId || !member?.id) return;
+
+            const isPrivate = member?.private === true;
+            const goingPrivate = !isPrivate;
+            const confirmMsg = goingPrivate ? t.kidView.confirmGoPrivate : t.kidView.confirmGoPublic;
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                await familyService.togglePrivacy(user.familyId, member.id, goingPrivate);
+            } catch (e) {
+                console.error('Privacy toggle error:', e);
+                const { emit } = await import('../../event-bus.js');
+                emit('toast', { message: t.errors.updateError, type: 'error' });
+            }
+        });
+    }
+
+    const changePasswordBtn = _container.querySelector('#change-password-btn');
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', async () => {
+            const { showChangeSelfPasswordModal } = await import('../modals/member-modals.js');
+            showChangeSelfPasswordModal();
         });
     }
 
@@ -513,26 +577,32 @@ async function switchTab(tabId) {
 
     if (_kidViewMod) { _kidViewMod.unmount(); _kidViewMod = null; }
     if (_familyViewMod) { _familyViewMod.unmount(); _familyViewMod = null; }
-    if (_schoolViewMod) { _schoolViewMod.unmount(); _schoolViewMod = null; }
 
     if (tabId === '__family__') {
         _familyViewMod = await import('./family-view.js');
         _familyViewMod.mount(viewContainer);
-    } else if (tabId === '__school__') {
-        _schoolViewMod = await import('./school-view.js');
-        _schoolViewMod.mount(viewContainer);
-    } else {
+    } else if (tabId && tabId !== '__school__') {
         _kidViewMod = await import('./kid-view.js');
         _kidViewMod.mount(viewContainer, tabId);
     }
 }
 
 function updatePriceStatus() {
-    const el = _container?.querySelector('.price-status');
     const lastUpdate = store.get('priceLastUpdate');
-    if (el && lastUpdate) {
-        const d = new Date(lastUpdate);
-        el.textContent = t.common.priceStatus(d.toLocaleTimeString('he-IL'));
+    if (!lastUpdate || !_container) return;
+    const d = new Date(lastUpdate);
+    const text = t.common.priceStatus(d.toLocaleTimeString('he-IL'));
+    let el = _container.querySelector('.price-status');
+    if (el) {
+        el.textContent = text;
+    } else {
+        const group = _container.querySelector('.price-group');
+        if (group) {
+            el = document.createElement('span');
+            el.className = 'price-status';
+            el.textContent = text;
+            group.prepend(el);
+        }
     }
 }
 
