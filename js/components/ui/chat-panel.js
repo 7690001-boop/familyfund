@@ -197,10 +197,6 @@ function renderTopicList(topics) {
                 <div class="chat-new-topic-form">
                     <input type="text" class="chat-new-topic-input" id="new-topic-input"
                            placeholder="${t.chat.newTopicInput}" dir="rtl" autocomplete="off" maxlength="60">
-                    <div class="chat-topic-suggestions">
-                        <span class="chat-topic-suggestions-label">${t.chat.topicSuggestionsLabel}</span>
-                        ${t.chat.topicSuggestions.map(q => `<button class="chat-suggestion-chip" data-suggestion="${esc(q)}">${esc(q)}</button>`).join('')}
-                    </div>
                     <div class="chat-new-topic-actions">
                         <button class="chat-new-topic-submit" id="new-topic-submit">${t.chat.newTopicSubmit}</button>
                         <button class="chat-new-topic-cancel" id="new-topic-cancel">${t.chat.newTopicCancel}</button>

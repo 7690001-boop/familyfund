@@ -4,83 +4,14 @@
 
 import * as store from '../../store.js';
 import { esc } from '../../utils/dom-helpers.js';
-import { DEFAULT_MATCHING_TICKERS, resolveTiers } from '../../utils/compute.js';
+import { DEFAULT_MATCHING_TICKERS } from '../../utils/compute.js';
 import { emit } from '../../event-bus.js';
 import { open as openModal, close as closeModal } from '../ui/modal.js';
 import * as familyService from '../../services/family-service.js';
 import t from '../../i18n.js';
 
-function buildTierRowHtml(tier, index) {
-    const ratioPct = Math.round(tier.ratio * 1000) / 10; // avoid floating point display issues
-    return `
-        <div class="tier-row" data-index="${index}">
-            <span class="tier-row__num">${index + 1}</span>
-            <input type="number" class="tier-days" min="1" value="${tier.days}" placeholder="${t.settings.matchingTierDays}" style="width:5rem">
-            <span class="tier-row__sep">${t.settings.matchingTierDays}</span>
-            <input type="number" class="tier-ratio-pct" min="0.1" step="0.1" value="${ratioPct}" placeholder="%" style="width:4rem">
-            <span class="tier-row__sep">%</span>
-            <button type="button" class="tier-remove-btn btn btn-ghost" title="${t.settings.matchingTierRemove}" style="color:var(--color-danger)">✕</button>
-        </div>
-    `;
-}
-
-function createTierRowElement(tier, index) {
-    const ratioPct = Math.round(tier.ratio * 1000) / 10;
-    const row = document.createElement('div');
-    row.className = 'tier-row';
-    row.dataset.index = String(index);
-
-    const num = document.createElement('span');
-    num.className = 'tier-row__num';
-    num.textContent = String(index + 1);
-
-    const daysInput = document.createElement('input');
-    daysInput.type = 'number';
-    daysInput.className = 'tier-days';
-    daysInput.min = '1';
-    daysInput.value = String(tier.days);
-    daysInput.placeholder = t.settings.matchingTierDays;
-    daysInput.style.width = '5rem';
-
-    const daysSep = document.createElement('span');
-    daysSep.className = 'tier-row__sep';
-    daysSep.textContent = t.settings.matchingTierDays;
-
-    const ratioInput = document.createElement('input');
-    ratioInput.type = 'number';
-    ratioInput.className = 'tier-ratio-pct';
-    ratioInput.min = '0.1';
-    ratioInput.step = '0.1';
-    ratioInput.value = String(ratioPct);
-    ratioInput.placeholder = '%';
-    ratioInput.style.width = '4rem';
-
-    const ratioSep = document.createElement('span');
-    ratioSep.className = 'tier-row__sep';
-    ratioSep.textContent = '%';
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'tier-remove-btn btn btn-ghost';
-    removeBtn.title = t.settings.matchingTierRemove;
-    removeBtn.style.color = 'var(--color-danger)';
-    removeBtn.textContent = '✕';
-
-    row.append(num, daysInput, daysSep, ratioInput, ratioSep, removeBtn);
-    return row;
-}
-
-function renumberTiers(editor) {
-    editor.querySelectorAll('.tier-row').forEach((row, i) => {
-        row.querySelector('.tier-row__num').textContent = String(i + 1);
-    });
-}
-
 export function showSettingsModal() {
     const family = store.get('family') || {};
-    const initialTiers = resolveTiers(family);
-
-    const tiersHtml = initialTiers.map(buildTierRowHtml).join('');
 
     const html = `
         <h2>${t.settings.title}</h2>
@@ -94,11 +25,16 @@ export function showSettingsModal() {
                 <input type="text" id="cfg-currency" value="${esc(family.currency_symbol || '₪')}">
             </div>
         </div>
-        <div class="form-group">
-            <label>${t.settings.matchingTiersLabel}</label>
-            <div id="tiers-editor" class="tiers-editor">${tiersHtml}</div>
-            <button type="button" id="add-tier-btn" class="btn btn-secondary btn-sm" style="margin-top:0.5rem">${t.settings.matchingTierAdd}</button>
-            <div class="form-hint">${t.settings.matchingTiersHint}</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="cfg-matching-days">${t.settings.matchingDaysLabel}</label>
+                <input type="number" id="cfg-matching-days" min="1" value="${family.matching_days || 365}">
+            </div>
+            <div class="form-group">
+                <label for="cfg-matching-ratio">${t.settings.matchingRatioLabel}</label>
+                <input type="number" id="cfg-matching-ratio" min="0.1" step="0.1" value="${family.matching_ratio ?? 1}">
+                <div class="form-hint">${t.settings.matchingRatioHint}</div>
+            </div>
         </div>
         <div class="form-group">
             <label for="cfg-matching-tickers">${t.settings.matchingTickersLabel}</label>
@@ -138,37 +74,14 @@ export function showSettingsModal() {
     const modal = document.getElementById('modal-content');
     modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
 
-    // Tier editor — add/remove rows dynamically
-    const tiersEditor = modal.querySelector('#tiers-editor');
-    modal.querySelector('#add-tier-btn').addEventListener('click', () => {
-        const rows = tiersEditor.querySelectorAll('.tier-row');
-        const lastDays = rows.length > 0
-            ? (parseInt(rows[rows.length - 1].querySelector('.tier-days').value) || 365) + 365
-            : 365;
-        tiersEditor.appendChild(createTierRowElement({ days: lastDays, ratio: 1 }, rows.length));
-        renumberTiers(tiersEditor);
-    });
-    tiersEditor.addEventListener('click', (e) => {
-        if (e.target.classList.contains('tier-remove-btn')) {
-            if (tiersEditor.querySelectorAll('.tier-row').length > 1) {
-                e.target.closest('.tier-row').remove();
-                renumberTiers(tiersEditor);
-            }
-        }
-    });
-
     modal.querySelector('#modal-save').addEventListener('click', async () => {
         try {
             const user = store.get('user');
             const incomeVal = modal.querySelector('#cfg-monthly-income').value;
             const newTickers = modal.querySelector('#cfg-matching-tickers').value.split(',').map(s => s.trim()).filter(Boolean);
             const retroactive = modal.querySelector('#cfg-matching-retroactive').checked;
-
-            const tierRows = tiersEditor.querySelectorAll('.tier-row');
-            const matching_tiers = [...tierRows].map(row => ({
-                days: parseInt(row.querySelector('.tier-days').value) || 365,
-                ratio: (parseFloat(row.querySelector('.tier-ratio-pct').value) || 100) / 100,
-            })).filter(tier => tier.days > 0 && tier.ratio > 0).sort((a, b) => a.days - b.days);
+            const matching_days = parseInt(modal.querySelector('#cfg-matching-days').value) || 365;
+            const matching_ratio = parseFloat(modal.querySelector('#cfg-matching-ratio').value) || 1;
 
             // Auto-set activation date when tickers are first configured
             const currentFamily = store.get('family') || {};
@@ -182,7 +95,9 @@ export function showSettingsModal() {
             await familyService.updateFamily(user.familyId, {
                 family_name: modal.querySelector('#cfg-family').value.trim(),
                 currency_symbol: modal.querySelector('#cfg-currency').value.trim() || '₪',
-                matching_tiers,
+                matching_days,
+                matching_ratio,
+                matching_tiers: null,
                 matching_tickers: newTickers,
                 matching_retroactive: retroactive,
                 matching_activated_at: activatedAt,

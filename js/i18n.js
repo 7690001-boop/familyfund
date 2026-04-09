@@ -153,7 +153,7 @@ export default {
         familyTab:          'משפחה',
         mobileNavInvestments: 'השקעות',
         mobileNavChat:        'צ׳אט',
-        mobileNavSchool:      'חוג',
+        mobileNavSchool:      'לימוד',
         welcome:            'ברוכים הבאים!',
         welcomeDesc:        'התחל בהוספת חבר משפחה כדי לעקוב אחרי ההשקעות',
         addMemberBtn:       '+ הוסף חבר משפחה',
@@ -417,13 +417,6 @@ export default {
         sharesLabel:    'מניות',
         unlockedLabel:  'פתוח',
         pendingNote:    'הבונוס ייכנס לתיק שלך כשתגיע לתאריך הפתיחה',
-        afterBonusTitle: 'סה״כ עתידי (כולל בונוס)',
-        afterBonusPortfolio: 'תיק נוכחי',
-        afterBonusPotential: 'בונוס פוטנציאלי',
-        afterBonusAtPrice: 'לפי מחיר נוכחי',
-        afterBonusTotal: 'סה״כ אם הכל יבשיל',
-        afterBonusNote: 'הבונוס תלוי בזמן החזקה — לא זמין עדיין',
-        afterBonusNotePartial: 'חלק מהבונוס הושג — הנותר תלוי בזמן החזקה',
     },
 
     members: {
@@ -504,15 +497,6 @@ export default {
         lockedNotice:       'נושא זה נעול — לא ניתן לשלוח הודעות',
         deleteTopic:        'מחק נושא',
         deleteTopicConfirm: 'למחוק את הנושא וכל ההודעות שלו?',
-        topicSuggestionsLabel: 'הצעות לנושא:',
-        topicSuggestions: [
-            'מה ה-S&P 500?',
-            'איך מרוויחים בונוס?',
-            'מה הסיכון בהשקעה?',
-            'כמה חסכנו עד היום?',
-            'מתי אוכל למשוך את הכסף?',
-            'מה ההבדל בין מניה לאגרות חוב?',
-        ],
     },
 
     admin: {
@@ -587,7 +571,7 @@ export default {
         areaDashboard:      '🏠 לוח הבית',
         areaKidView:        '👦 תצוגת ילד',
         areaFamilyView:     '👨‍👩‍👧 תצוגת משפחה',
-        areaSchool:         '🎯 חוג',
+        areaSchool:         '📚 בית ספר',
         areaSettings:       '⚙️ הגדרות',
         areaImport:         '📥 ייבוא נתונים',
         areaMembers:        '👥 ניהול חברים',
@@ -625,13 +609,9 @@ export default {
         title:              'הגדרות',
         familyNameLabel:    'שם המשפחה',
         currencyLabel:      'סמל מטבע',
-        matchingTiersLabel:         'שלבי הבונוס',
-        matchingTiersHint:          'כל שלב מוסיף בונוס נוסף לאחר מספר הימים שנקבע',
-        matchingTierAdd:            '+ הוסף שלב',
-        matchingTierDays:           'ימים',
-        matchingTierBonus:          'בונוס',
-        matchingTierLevel:          (n) => 'שלב ' + n,
-        matchingTierRemove:         'הסר',
+        matchingDaysLabel:          'ימי המתנה לבונוס',
+        matchingRatioLabel:         'יחס הבונוס',
+        matchingRatioHint:          '1 = הכפלה, 0.5 = חצי, 2 = שלישה',
         matchingTickersLabel:       'טיקרים לתוכנית הבונוס',
         matchingTickersPlaceholder: 'VOO, SPY, CSPX',
         matchingTickersHint:        'רשימת טיקרים מופרדת בפסיקים',
@@ -939,10 +919,10 @@ export default {
 
     school: {
         // Nav
-        tab:                    '🎯 חוג',
+        tab:                    '📚 מרכז הידע',
 
         // View
-        title:                  'חוג ההשקעות',
+        title:                  'מרכז הידע להשקעות',
         subtitle:               'למדו, דונו וגלו יחד על עולם ההשקעות',
         addTopicBtn:            '+ נושא חדש',
         filterAll:              'הכל',
@@ -1092,7 +1072,6 @@ export default {
         aiChatNewChat:          '+ שיחה חדשה',
         aiChatPlaceholder:      'שאל על כסף, השקעות, חיסכון...',
         aiChatSend:             '↑',
-        aiChatTyping:           'מקלידה',
         aiChatEmpty:            'שאלי אותי כל שאלה על כסף, השקעות או חיסכון!',
         aiChatRefused:          'אני יכולה לענות רק על שאלות על כסף, השקעות וכלכלה 😊',
         aiChatError:            'משהו השתבש — נסה שוב',

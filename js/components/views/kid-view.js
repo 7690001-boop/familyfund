@@ -268,7 +268,7 @@ function renderView() {
 
     matchingSection.render(
         _container.querySelector('[data-slot="matching"]'),
-        matching, family, summary.totalCurrent
+        matching, family
     );
 
     const editAvatarBtn = _container.querySelector('#edit-avatar-btn');

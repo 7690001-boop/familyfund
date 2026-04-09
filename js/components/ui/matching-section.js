@@ -6,7 +6,7 @@ import { formatCurrency, formatDate, formatShares } from '../../utils/format.js'
 import { resolveTiers } from '../../utils/compute.js';
 import t from '../../i18n.js';
 
-export function render(container, matching, family, totalCurrent) {
+export function render(container, matching, family) {
     const hasTickers = family?.matching_tickers?.length || family?.sp500_ticker;
     if (!hasTickers) {
         container.innerHTML = '';
@@ -138,38 +138,6 @@ export function render(container, matching, family, totalCurrent) {
         }
     }).join('');
 
-    const afterBonusHtml = totalCurrent != null && matching.total > 0 ? (() => {
-        const portfolioVal = totalCurrent;
-        const bonusVal = matching.total;
-        const combined = portfolioVal + bonusVal;
-        const noteText = matching.matched > 0 ? t.matching.afterBonusNotePartial : t.matching.afterBonusNote;
-        return `
-            <div class="after-bonus-total">
-                <div class="after-bonus-total__title">${t.matching.afterBonusTitle}</div>
-                <div class="after-bonus-total__rows">
-                    <div class="after-bonus-total__row">
-                        <span class="after-bonus-total__label">${t.matching.afterBonusPortfolio}</span>
-                        <span class="after-bonus-total__value">${formatCurrency(portfolioVal, sym)}</span>
-                    </div>
-                    <div class="after-bonus-total__row after-bonus-total__row--bonus">
-                        <span class="after-bonus-total__label">
-                            <span class="after-bonus-total__lock">🔒</span>
-                            ${t.matching.afterBonusPotential}
-                            <span class="after-bonus-total__at-price">(${t.matching.afterBonusAtPrice})</span>
-                        </span>
-                        <span class="after-bonus-total__value after-bonus-total__value--locked">+${formatCurrency(bonusVal, sym)}</span>
-                    </div>
-                    <div class="after-bonus-total__divider"></div>
-                    <div class="after-bonus-total__row after-bonus-total__row--combined">
-                        <span class="after-bonus-total__label">${t.matching.afterBonusTotal}</span>
-                        <span class="after-bonus-total__value after-bonus-total__value--combined">${formatCurrency(combined, sym)}</span>
-                    </div>
-                </div>
-                <div class="after-bonus-total__note">⏳ ${noteText}</div>
-            </div>
-        `;
-    })() : '';
-
     container.innerHTML = `
         <div class="section-header">
             <h2>${t.matching.title}</h2>
@@ -184,6 +152,5 @@ export function render(container, matching, family, totalCurrent) {
             </div>
         </div>
         <div class="deposit-cards-grid">${cardsHtml}</div>
-        ${afterBonusHtml}
     `;
 }

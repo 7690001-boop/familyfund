@@ -885,11 +885,10 @@ async function getServiceAccountToken(env) {
     return tokenData.access_token;
 }
 
-// ─── AI Chat Handler (Gemini 2.5 Flash-Lite for answers, CF Workers AI for topic classifier) ───
+// ─── AI Chat Handler (Gemini 1.5 Flash, 2-step classifier) ───────────────────
 
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
-const AI_LIMIT_PER_HOUR = 500;  // per member
-const AI_LIMIT_PER_DAY  = 1000; // per member — prevents one kid from exhausting shared project quota
+const AI_RATE_LIMIT_PER_HOUR = 200;
 
 async function callGemini(apiKey, systemPrompt, contents) {
     const body = { contents, generationConfig: { maxOutputTokens: 600, temperature: 0.7 } };
@@ -899,76 +898,19 @@ async function callGemini(apiKey, systemPrompt, contents) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
-    if (!res.ok) {
-        const errorText = await res.text();
-        const err = new Error(`Gemini ${res.status}: ${errorText}`);
-        if (res.status === 429) {
-            // Parse retry delay from Gemini response
-            let retryAfter = 60;
-            try {
-                const errData = JSON.parse(errorText);
-                const retryInfo = errData.error?.details?.find(d => d['@type']?.includes('RetryInfo'));
-                if (retryInfo?.retryDelay) retryAfter = Math.ceil(parseInt(retryInfo.retryDelay) + 1);
-            } catch { /* ignore parse errors */ }
-            err.geminiRateLimit = true;
-            err.retryAfter = retryAfter;
-        }
-        throw err;
-    }
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 async function checkAiRateLimit(env, uid) {
     if (!env.RATE_LIMIT) return false;
-    const now = Date.now();
-    const hour = Math.floor(now / 3_600_000);
-    const day  = Math.floor(now / 86_400_000);
-
-    const hourKey = `rl:ai:h:${uid}:${hour}`;
-    const dayKey  = `rl:ai:d:${uid}:${day}`;
-
-    const [hourCount, dayCount] = await Promise.all([
-        env.RATE_LIMIT.get(hourKey).then(v => parseInt(v || '0')),
-        env.RATE_LIMIT.get(dayKey).then(v => parseInt(v || '0')),
-    ]);
-
-    if (hourCount >= AI_LIMIT_PER_HOUR || dayCount >= AI_LIMIT_PER_DAY) return true;
-
-    await Promise.all([
-        env.RATE_LIMIT.put(hourKey, String(hourCount + 1), { expirationTtl: 7200 }),
-        env.RATE_LIMIT.put(dayKey,  String(dayCount  + 1), { expirationTtl: 172800 }),
-    ]);
+    const hour = Math.floor(Date.now() / 3_600_000);
+    const key = `rl:ai:${uid}:${hour}`;
+    const count = parseInt(await env.RATE_LIMIT.get(key) || '0');
+    if (count >= AI_RATE_LIMIT_PER_HOUR) return true;
+    await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: 7200 });
     return false;
-}
-
-// Returns true if the message is about finance/economics, false otherwise.
-// Uses Cloudflare Workers AI (free, no external quota) so Gemini quota is only
-// spent on messages that pass this check.
-async function isFinanceQuestion(env, message) {
-    if (!env.AI) return true; // if binding missing, allow through
-    try {
-        const response = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You classify questions. Reply with only the word YES if the question is about finance, money, savings, investments, budgeting, economics, or banking. Reply NO otherwise.',
-                },
-                {
-                    role: 'user',
-                    content: message,
-                },
-            ],
-            max_tokens: 16,
-        });
-        const answer = (response?.response || '').trim().toUpperCase();
-        console.log(`→ CF AI classifier: "${answer}" for message: "${message.slice(0, 60)}"`);
-        // Check if response contains YES anywhere (model may add punctuation or extra words)
-        return answer.includes('YES');
-    } catch (e) {
-        console.warn(`→ CF AI classifier error: ${e.message} — allowing through`);
-        return true; // fail open so Gemini still handles it
-    }
 }
 
 async function handleAiChat(request, env, origin, allowedOrigin) {
@@ -1026,19 +968,13 @@ async function handleAiChat(request, env, origin, allowedOrigin) {
         }
     }
 
-    // 6. Classify with Cloudflare Workers AI (free) — only call Gemini for finance questions
+    // 6. Single-call chat — system prompt enforces finance topics and signals off-topic via REFUSED prefix
     if (!message?.trim()) return corsResponse(JSON.stringify({ error: 'message required' }), 400, origin, allowedOrigin);
 
-    const isFinance = await isFinanceQuestion(env, message);
-    if (!isFinance) {
-        console.log(`→ ai-chat refused (off-topic) for uid=${uid}`);
-        return corsResponse(JSON.stringify({ refused: true }), 200, origin, allowedOrigin);
-    }
-
-    // 7. Call Gemini for the actual answer (finance question confirmed)
     const systemPrompt = `אתה עוזר לימודי ידידותי לילדים בגילאי 8-16 בנושאי כלכלה, השקעות וניהול כסף.
 ענה בעברית בלבד, בשפה פשוטה ומובנת לילדים.
-תן תשובות קצרות וברורות (2-4 משפטים).`;
+תן תשובות קצרות וברורות (2-4 משפטים).
+אם השאלה אינה קשורה לכסף, השקעות, חיסכון או כלכלה — ענה בדיוק במילה אחת: REFUSED`;
 
     const contents = [
         ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })),
@@ -1047,13 +983,12 @@ async function handleAiChat(request, env, origin, allowedOrigin) {
 
     try {
         const answer = await callGemini(env.GEMINI_API_KEY, systemPrompt, contents);
+        if (answer.trim() === 'REFUSED') {
+            return corsResponse(JSON.stringify({ refused: true }), 200, origin, allowedOrigin);
+        }
         console.log(`→ ai-chat answer OK for uid=${uid}`);
         return corsResponse(JSON.stringify({ answer }), 200, origin, allowedOrigin);
     } catch (e) {
-        if (e.geminiRateLimit) {
-            console.warn(`→ ai-chat Gemini rate limit uid=${uid}, retryAfter=${e.retryAfter}s`);
-            return corsResponse(JSON.stringify({ rateLimited: true, retryAfter: e.retryAfter }), 429, origin, allowedOrigin);
-        }
         console.error(`→ ai-chat answer error: ${e.message}`);
         return corsResponse(JSON.stringify({ error: 'AI service error', detail: e.message }), 502, origin, allowedOrigin);
     }
@@ -1063,11 +998,12 @@ async function handleAiChat(request, env, origin, allowedOrigin) {
 
 function isAllowedOrigin(origin, allowedOrigin) {
     if (origin === allowedOrigin) return true;
-    // Always allow localhost origins (local dev)
-    if (origin === 'http://localhost'
-        || origin.startsWith('http://localhost:')
-        || origin.startsWith('http://127.0.0.1')) {
-        return true;
+    // Only allow localhost origins when the configured origin is also localhost (dev mode)
+    const isDevMode = allowedOrigin.startsWith('http://localhost') || allowedOrigin.startsWith('http://127.0.0.1');
+    if (isDevMode) {
+        return origin === 'http://localhost'
+            || origin.startsWith('http://localhost:')
+            || origin.startsWith('http://127.0.0.1');
     }
     return false;
 }

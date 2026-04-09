@@ -792,7 +792,6 @@ async function sendAiMessage() {
 
     _aiMessages.push({ role: 'user', text });
 
-    // Append to DOM without full re-render
     const msgList = _container?.querySelector('#sp-ai-messages');
     if (msgList) {
         const emptyEl = msgList.querySelector('.sp-ai-empty');
@@ -865,7 +864,6 @@ async function sendAiMessage() {
         if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
         _container?.querySelector('#sp-ai-send')?.removeAttribute('disabled');
 
-        // Show save button if we now have a valid bot response
         const hasAiBotMessages = _aiMessages.some(m => m.role === 'bot' && !m.refused && !m.error);
         const controls = _container?.querySelector('.sp-ai-controls');
         if (hasAiBotMessages && controls && !controls.querySelector('#sp-ai-save-topic')) {
