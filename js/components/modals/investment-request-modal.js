@@ -155,6 +155,7 @@ export function showSellRequestModal(kid, investment) {
                 <input type="number" id="req-amount" step="any" min="0">
             </div>
         </div>
+        <div style="font-size:0.8rem;color:var(--color-text-secondary);margin-top:-0.25rem;margin-bottom:0.5rem">${t.settlement.priceEstimateNote}</div>
         <div class="form-group">
             <label for="req-note">${t.investmentRequest.noteLabel}</label>
             <input type="text" id="req-note" placeholder="${t.investmentRequest.notePlaceholder}">

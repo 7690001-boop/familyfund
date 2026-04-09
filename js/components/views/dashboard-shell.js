@@ -27,6 +27,7 @@ import t from '../../i18n.js';
 let _container = null;
 let _unsubs = [];
 let _activeTab = null;
+let _mobileSection = 'investments'; // 'investments' | 'chat' | 'school'
 let _kidViewMod = null;
 let _familyViewMod = null;
 let _schoolPanelMod = null;
@@ -118,6 +119,7 @@ export function unmount() {
     priceService.stopAutoRefresh();
     _container = null;
     _activeTab = null;
+    _mobileSection = 'investments';
 }
 
 function renderShell() {
@@ -302,6 +304,21 @@ function renderShell() {
             </div>
             <aside class="school-panel-container${(_schoolPanelMod?.getState?.() ?? 'sidebar') === 'collapsed' ? ' collapsed' : (_schoolPanelMod?.getState?.() === 'expanded' ? ' expanded' : ' sidebar')}" id="school-panel-container"></aside>
         </div>
+        <nav class="mobile-nav-bar" id="mobile-nav-bar">
+            <button class="mobile-nav-btn${_mobileSection === 'investments' ? ' active' : ''}" data-section="investments">
+                <span class="mobile-nav-icon">📈</span>
+                <span class="mobile-nav-label">${t.dashboard.mobileNavInvestments}</span>
+            </button>
+            ${!family.chatDisabled ? `
+            <button class="mobile-nav-btn${_mobileSection === 'chat' ? ' active' : ''}" data-section="chat">
+                <span class="mobile-nav-icon">💬</span>
+                <span class="mobile-nav-label">${t.dashboard.mobileNavChat}</span>
+            </button>` : ''}
+            <button class="mobile-nav-btn${_mobileSection === 'school' ? ' active' : ''}" data-section="school">
+                <span class="mobile-nav-icon">📚</span>
+                <span class="mobile-nav-label">${t.dashboard.mobileNavSchool}</span>
+            </button>
+        </nav>
         <input type="file" id="import-file" accept=".json" hidden>
     `;
 
@@ -362,6 +379,21 @@ async function mountSchoolPanel(container) {
 }
 
 
+function switchMobileSection(section) {
+    if (!_container) return;
+    _mobileSection = section;
+
+    const chatEl = _container.querySelector('#chat-panel-container');
+    const schoolEl = _container.querySelector('#school-panel-container');
+
+    chatEl?.classList.toggle('mobile-active', section === 'chat');
+    schoolEl?.classList.toggle('mobile-active', section === 'school');
+
+    _container.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.section === section);
+    });
+}
+
 function wireShellEvents() {
     const user = store.get('user');
     const effectiveUser = isImpersonating() ? getParentUser() : user;
@@ -409,6 +441,10 @@ function wireShellEvents() {
             switchTab(kidIdentityCard.dataset.kid);
         });
     }
+
+    _container.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchMobileSection(btn.dataset.section));
+    });
 
     _container.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.kid));

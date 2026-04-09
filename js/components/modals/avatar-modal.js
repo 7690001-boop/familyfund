@@ -10,10 +10,10 @@ import {
     DEFAULT_AVATAR, renderAvatar,
     SKIN_COLORS, EYE_COLORS, HAIR_COLORS, BG_COLORS,
     FACE_SHAPE_OPTIONS, EYES_OPTIONS, EYEBROW_OPTIONS, MOUTH_OPTIONS,
-    HAIR_OPTIONS, ACCESSORY_OPTIONS, GLASSES_OPTIONS, SHOULDERS_OPTIONS,
+    HAIR_OPTIONS, ACCESSORY_OPTIONS, GLASSES_OPTIONS, SHOULDERS_OPTIONS, ANIMAL_OPTIONS,
     LABELS,
     FACE_SHAPE_LABELS, EYES_LABELS, EYEBROW_LABELS, MOUTH_LABELS,
-    HAIR_LABELS, ACCESSORY_LABELS, GLASSES_LABELS, SHOULDERS_LABELS,
+    HAIR_LABELS, ACCESSORY_LABELS, GLASSES_LABELS, SHOULDERS_LABELS, ANIMAL_LABELS,
 } from '../ui/avatar.js';
 import t from '../../i18n.js';
 
@@ -108,6 +108,10 @@ export function showAvatarModal(kidName, currentAvatar) {
             </div>
             <div class="avatar-controls">
                 <div class="avatar-section">
+                    <label>${LABELS.animalType}</label>
+                    ${optionPicker('pick-animal', ANIMAL_OPTIONS, ANIMAL_LABELS, draft.animalType || 'none')}
+                </div>
+                <div class="avatar-section">
                     <label>${LABELS.bgColor}</label>
                     ${colorPicker('pick-bg', BG_COLORS, draft.bgColor)}
                 </div>
@@ -200,6 +204,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             autoSave();
         });
     }
+    wireOptions('pick-animal', 'animalType');
     wireOptions('pick-face', 'faceShape');
     wireOptions('pick-eyes', 'eyes');
     wireOptions('pick-eyebrows', 'eyebrows');
@@ -258,6 +263,7 @@ export function showAvatarModal(kidName, currentAvatar) {
             freckles: Math.random() > 0.7,
             bgColor: pick(BG_COLORS),
             shoulders: pick(SHOULDERS_OPTIONS),
+            animalType: pick(ANIMAL_OPTIONS),
         };
         rebuildControls();
         preview();
@@ -286,6 +292,7 @@ export function showAvatarModal(kidName, currentAvatar) {
         updateOptionActive('pick-hair', draft.hair);
         updateOptionActive('pick-glasses', draft.glasses);
         updateOptionActive('pick-shoulders', draft.shoulders || 'none');
+        updateOptionActive('pick-animal', draft.animalType || 'none');
         // Multi-select accessories
         modal.querySelectorAll('#pick-accessories .avatar-multi-btn').forEach(b => {
             b.classList.toggle('active', draft.accessories.includes(b.dataset.value));

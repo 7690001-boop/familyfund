@@ -6,6 +6,7 @@ import * as store from '../../store.js';
 import { esc } from '../../utils/dom-helpers.js';
 import * as schoolService from '../../services/school-service.js';
 import t from '../../i18n.js';
+import { YAHOO_PROXY } from '../../config.js';
 
 const VISIBLE = 3; // topic bars shown at once
 
@@ -33,6 +34,11 @@ let _comments = [];
 let _questions = [];
 let _unsubComments = null;
 let _unsubQuestions = null;
+
+// AI chat state
+let _viewMode = 'topics'; // 'topics' | 'ai_chat'
+let _aiMessages = []; // { role: 'user'|'bot', text: string, refused?: bool, error?: bool }
+let _aiLoading = false;
 
 function debouncedRender() {
     if (_renderTimer) clearTimeout(_renderTimer);
@@ -78,6 +84,9 @@ export function unmount() {
     _userId = null;
     _carouselStart = 0;
     _searchQuery = '';
+    _viewMode = 'topics';
+    _aiMessages = [];
+    _aiLoading = false;
 }
 
 export function setState(state) {
@@ -172,10 +181,12 @@ function renderView() {
                 <span class="sp-header-logo">📚</span>
                 <span class="sp-header-title">${t.school.title}</span>
                 <div class="sp-header-actions">
+                    <button class="sp-btn sp-ai-chat-btn${_viewMode === 'ai_chat' ? ' active' : ''}" id="sp-ai-chat-btn" title="${t.school.aiChatBtn}">🤖</button>
                     ${isManager ? `<button class="sp-btn sp-manage-btn" id="sp-manage-btn" title="ניהול">⚙️</button>` : ''}
                 </div>
             </div>
 
+            ${_viewMode === 'ai_chat' ? renderAiChat() : `
             ${total > 0 ? `
             <div class="sp-progress-row">
                 <div class="sp-prog-track"><div class="sp-prog-fill" style="width:${pct}%"></div></div>
@@ -216,10 +227,15 @@ function renderView() {
             ${expandedTopic ? `
             <div class="sp-detail" id="sp-detail">
                 ${renderTopicDetail(expandedTopic, isManager, user)}
-            </div>` : ''}`}
+            </div>` : ''}`}`}
         </div>`;
 
     wirePanelEvents(isManager, user, filtered);
+
+    if (_viewMode === 'ai_chat') {
+        wireAiChatEvents();
+        return;
+    }
 
     // Re-wire live listeners
     if (_expandedTopicId) {
@@ -492,6 +508,16 @@ function wirePanelEvents(isManager, user, filteredTopics) {
         setState(_panelState === 'sidebar' ? 'expanded' : 'collapsed');
     });
 
+    // AI chat toggle
+    _container.querySelector('#sp-ai-chat-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _viewMode = _viewMode === 'ai_chat' ? 'topics' : 'ai_chat';
+        renderView();
+        if (_viewMode === 'ai_chat') {
+            setTimeout(() => _container?.querySelector('#sp-ai-input')?.focus(), 50);
+        }
+    });
+
     // Manage button (managers only)
     _container.querySelector('#sp-manage-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -683,6 +709,237 @@ function exportAllTopics(topics) {
     const a = document.createElement('a');
     a.href = url; a.download = 'school-topics.json'; a.click();
     URL.revokeObjectURL(url);
+}
+
+// ─── AI Chat ──────────────────────────────────────────────────
+
+function renderAiChat() {
+    const hasAiBotMessages = _aiMessages.some(m => m.role === 'bot' && !m.refused && !m.error);
+
+    const messagesHtml = _aiMessages.length === 0
+        ? `<div class="sp-ai-empty">
+               <div class="sp-ai-empty-icon">🤖</div>
+               <div>${t.school.aiChatEmpty}</div>
+           </div>`
+        : _aiMessages.map(m => {
+            const cls = m.refused ? 'refused' : m.error ? 'error' : m.role === 'user' ? 'user' : 'bot';
+            const label = m.role === 'user' ? '' : `<span class="sp-ai-bubble-label">🤖</span>`;
+            return `<div class="sp-ai-row sp-ai-row--${m.role === 'user' ? 'user' : 'bot'}">
+                ${label}<div class="sp-ai-msg sp-ai-msg--${cls}">${esc(m.text)}</div>
+            </div>`;
+        }).join('') + (_aiLoading ? `
+            <div class="sp-ai-row sp-ai-row--bot">
+                <span class="sp-ai-bubble-label">🤖</span>
+                <div class="sp-ai-typing" id="sp-ai-typing">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>` : '');
+
+    return `
+        <div class="sp-ai-chat">
+            <div class="sp-ai-chat-header">
+                <span class="sp-ai-chat-title">${t.school.aiChatTitle}</span>
+                ${_aiMessages.length > 0 ? `<button class="sp-ai-new-btn" id="sp-ai-new">${t.school.aiChatNewChat}</button>` : ''}
+            </div>
+            <div class="sp-ai-messages" id="sp-ai-messages">${messagesHtml}</div>
+            <div class="sp-ai-controls">
+                <div class="sp-ai-input-row">
+                    <input class="sp-ai-input" id="sp-ai-input" type="text"
+                           placeholder="${t.school.aiChatPlaceholder}" maxlength="300"
+                           ${_aiLoading ? 'disabled' : ''} />
+                    <button class="sp-ai-send-btn" id="sp-ai-send"
+                            ${_aiLoading ? 'disabled' : ''}>${t.school.aiChatSend}</button>
+                </div>
+                ${hasAiBotMessages ? `
+                <button class="sp-ai-save-btn" id="sp-ai-save-topic">${t.school.aiChatSaveTopicBtn}</button>` : ''}
+            </div>
+        </div>`;
+}
+
+function wireAiChatEvents() {
+    const input = _container?.querySelector('#sp-ai-input');
+    const send = _container?.querySelector('#sp-ai-send');
+    if (!input || !send) return;
+
+    send.addEventListener('click', sendAiMessage);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) sendAiMessage(); });
+
+    _container?.querySelector('#sp-ai-save-topic')?.addEventListener('click', saveAiChatAsTopic);
+
+    _container?.querySelector('#sp-ai-new')?.addEventListener('click', () => {
+        _aiMessages = [];
+        _aiLoading = false;
+        renderView();
+        setTimeout(() => _container?.querySelector('#sp-ai-input')?.focus(), 50);
+    });
+
+    const msgs = _container?.querySelector('#sp-ai-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendAiMessage() {
+    const input = _container?.querySelector('#sp-ai-input');
+    if (!input || _aiLoading) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    _aiLoading = true;
+
+    const cleanHistory = _aiMessages
+        .filter(m => !m.refused && !m.error)
+        .map(m => ({ role: m.role, text: m.text }));
+
+    _aiMessages.push({ role: 'user', text });
+
+    // Append to DOM without full re-render
+    const msgList = _container?.querySelector('#sp-ai-messages');
+    if (msgList) {
+        const emptyEl = msgList.querySelector('.sp-ai-empty');
+        if (emptyEl) emptyEl.remove();
+        const userRow = document.createElement('div');
+        userRow.className = 'sp-ai-row sp-ai-row--user';
+        const userBubble = document.createElement('div');
+        userBubble.className = 'sp-ai-msg sp-ai-msg--user';
+        userBubble.textContent = text;
+        userRow.appendChild(userBubble);
+        msgList.appendChild(userRow);
+
+        const typingRow = document.createElement('div');
+        typingRow.className = 'sp-ai-row sp-ai-row--bot';
+        typingRow.id = 'sp-ai-typing-row';
+        const typingLabel = document.createElement('span');
+        typingLabel.className = 'sp-ai-bubble-label';
+        typingLabel.textContent = '🤖';
+        const typingBubble = document.createElement('div');
+        typingBubble.className = 'sp-ai-typing';
+        typingBubble.id = 'sp-ai-typing';
+        typingBubble.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+        typingRow.append(typingLabel, typingBubble);
+        msgList.appendChild(typingRow);
+        msgList.scrollTop = msgList.scrollHeight;
+    }
+
+    if (input) input.disabled = true;
+    _container?.querySelector('#sp-ai-send')?.setAttribute('disabled', '');
+
+    try {
+        const { getAppAuth } = await import('../../firebase-init.js');
+        const idToken = await getAppAuth().currentUser?.getIdToken();
+        if (!idToken) throw new Error('Not authenticated');
+
+        const res = await fetch(`${YAHOO_PROXY}/ai-chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+            body: JSON.stringify({ message: text, history: cleanHistory }),
+        });
+
+        _container?.querySelector('#sp-ai-typing-row')?.remove();
+
+        if (res.status === 429) {
+            const d = await res.json().catch(() => ({}));
+            const msg = t.school.aiChatRateLimit(d.retryAfter || 60);
+            _aiMessages.push({ role: 'bot', text: msg, error: true });
+            appendAiMsg(msg, 'error');
+        } else if (!res.ok) {
+            throw new Error('HTTP ' + res.status);
+        } else {
+            const data = await res.json();
+            if (data.refused) {
+                _aiMessages.push({ role: 'bot', text: t.school.aiChatRefused, refused: true });
+                appendAiMsg(t.school.aiChatRefused, 'refused');
+            } else if (data.answer) {
+                _aiMessages.push({ role: 'bot', text: data.answer });
+                appendAiMsg(data.answer, 'bot');
+            } else {
+                throw new Error('Empty response');
+            }
+        }
+    } catch {
+        _container?.querySelector('#sp-ai-typing-row')?.remove();
+        _aiMessages.push({ role: 'bot', text: t.school.aiChatError, error: true });
+        appendAiMsg(t.school.aiChatError, 'error');
+    } finally {
+        _aiLoading = false;
+        const inputEl = _container?.querySelector('#sp-ai-input');
+        if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
+        _container?.querySelector('#sp-ai-send')?.removeAttribute('disabled');
+
+        // Show save button if we now have a valid bot response
+        const hasAiBotMessages = _aiMessages.some(m => m.role === 'bot' && !m.refused && !m.error);
+        const controls = _container?.querySelector('.sp-ai-controls');
+        if (hasAiBotMessages && controls && !controls.querySelector('#sp-ai-save-topic')) {
+            const saveBtn = document.createElement('button');
+            saveBtn.id = 'sp-ai-save-topic';
+            saveBtn.className = 'sp-ai-save-btn';
+            saveBtn.textContent = t.school.aiChatSaveTopicBtn;
+            saveBtn.addEventListener('click', saveAiChatAsTopic);
+            controls.appendChild(saveBtn);
+        }
+
+        const msgs = _container?.querySelector('#sp-ai-messages');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+}
+
+function appendAiMsg(text, type) {
+    const msgList = _container?.querySelector('#sp-ai-messages');
+    if (!msgList) return;
+    const row = document.createElement('div');
+    row.className = 'sp-ai-row sp-ai-row--bot';
+    const label = document.createElement('span');
+    label.className = 'sp-ai-bubble-label';
+    label.textContent = '🤖';
+    const bubble = document.createElement('div');
+    bubble.className = `sp-ai-msg sp-ai-msg--${type}`;
+    bubble.textContent = text;
+    row.append(label, bubble);
+    msgList.appendChild(row);
+}
+
+async function saveAiChatAsTopic() {
+    const btn = _container?.querySelector('#sp-ai-save-topic');
+    if (btn) btn.disabled = true;
+
+    try {
+        const { getAppAuth } = await import('../../firebase-init.js');
+        const idToken = await getAppAuth().currentUser?.getIdToken();
+        if (!idToken) throw new Error('Not authenticated');
+
+        const validHistory = _aiMessages
+            .filter(m => !m.refused && !m.error)
+            .map(m => ({ role: m.role, text: m.text }));
+
+        const res = await fetch(`${YAHOO_PROXY}/ai-chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+            body: JSON.stringify({ summarize: true, history: validHistory }),
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data.topic?.title || !data.topic?.content) throw new Error('Invalid topic');
+
+        const user = store.get('user');
+        const authorName = user?.role === 'manager'
+            ? (store.get('family')?.family_name || t.school.parent)
+            : (user?.kidName || t.school.kid);
+
+        await schoolService.addTopic(_familyId, {
+            ...data.topic,
+            created_by_name: authorName,
+            status: 'draft',
+        });
+
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = t.school.aiChatTopicSaved;
+            setTimeout(() => { if (btn) btn.textContent = t.school.aiChatSaveTopicBtn; }, 3000);
+        }
+    } catch {
+        if (btn) btn.disabled = false;
+        alert(t.school.aiChatTopicSaveError);
+    }
 }
 
 function wireQuizEvents(quizEl, topicId) {

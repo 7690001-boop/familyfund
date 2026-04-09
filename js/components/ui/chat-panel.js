@@ -35,6 +35,8 @@ let _currentView = VIEW_TOPICS;
 let _collapsed = false;
 let _creatingTopic = false;
 let _editingMessageId = null;
+let _pendingDeletes = new Map(); // msgId → { timerId }
+let _deletedGhosts = new Map();  // msgId → { created_at } — permanent placeholder after undo expires
 let _listeningFamilyId = null;
 let _scrollLocked = false;
 let _announcements = null;      // cached from fetch
@@ -87,12 +89,21 @@ export function unmount() {
     _unsubs.forEach(fn => fn());
     _unsubs = [];
     if (chatService) chatService.stopTopics();
+    clearAllPendingDeletes();
     _container = null;
     _currentTopicId = null;
     _currentView = VIEW_TOPICS;
     _collapsed = false;
     _editingMessageId = null;
     _listeningFamilyId = null;
+}
+
+function clearAllPendingDeletes() {
+    for (const entry of _pendingDeletes.values()) {
+        clearTimeout(entry.timerId);
+    }
+    _pendingDeletes.clear();
+    _deletedGhosts.clear();
 }
 
 function getMemberByUid(uid) {
@@ -157,7 +168,7 @@ function render() {
     _container.classList.toggle('collapsed', _collapsed);
 
     if (_collapsed) {
-        _container.innerHTML = `<button class="chat-collapse-handle" id="chat-handle-btn" title="${t.chat.toggleOpen}"><span class="chat-handle-icon">💬</span><span class="chat-handle-arrow">›</span></button>`;
+        _container.innerHTML = `<button class="chat-collapse-handle" id="chat-handle-btn" title="${t.chat.toggleOpen}"><span class="chat-handle-icon">💬</span><span class="chat-handle-label">${t.chat.title}</span><span class="chat-handle-arrow">›</span></button>`;
     } else {
         _container.innerHTML = `<div class="chat-panel">
             <div class="chat-panel-header">
@@ -186,6 +197,10 @@ function renderTopicList(topics) {
                 <div class="chat-new-topic-form">
                     <input type="text" class="chat-new-topic-input" id="new-topic-input"
                            placeholder="${t.chat.newTopicInput}" dir="rtl" autocomplete="off" maxlength="60">
+                    <div class="chat-topic-suggestions">
+                        <span class="chat-topic-suggestions-label">${t.chat.topicSuggestionsLabel}</span>
+                        ${t.chat.topicSuggestions.map(q => `<button class="chat-suggestion-chip" data-suggestion="${esc(q)}">${esc(q)}</button>`).join('')}
+                    </div>
                     <div class="chat-new-topic-actions">
                         <button class="chat-new-topic-submit" id="new-topic-submit">${t.chat.newTopicSubmit}</button>
                         <button class="chat-new-topic-cancel" id="new-topic-cancel">${t.chat.newTopicCancel}</button>
@@ -297,20 +312,45 @@ function renderLoadMoreIndicator() {
 }
 
 function renderMessagesList() {
-    const messages = store.get('chatMessages') || [];
+    const storeMessages = store.get('chatMessages') || [];
     const user = store.get('user');
+
+    // Merge store messages with ghost placeholders for permanently deleted messages
+    const storeIds = new Set(storeMessages.map(m => m.id));
+    const ghosts = [];
+    for (const [id, ghost] of _deletedGhosts) {
+        if (!storeIds.has(id)) {
+            ghosts.push({ id, created_at: ghost.created_at, _ghost: true });
+        }
+    }
+    const messages = [...storeMessages, ...ghosts].sort((a, b) => {
+        const ta = a.created_at?.seconds ?? 0;
+        const tb = b.created_at?.seconds ?? 0;
+        return ta - tb;
+    });
+
     if (messages.length === 0) {
         return `<p class="chat-empty">${t.chat.emptyMessages}</p>`;
     }
 
-    const editableIds = getEditableIds(messages, user?.uid);
+    // Only compute editable IDs from real (non-ghost) messages
+    const realMessages = messages.filter(m => !m._ghost);
+    const editableIds = getEditableIds(realMessages, user?.uid);
 
     return messages.map(m => {
+        // Permanent ghost placeholder (no undo)
+        if (m._ghost) {
+            return `<div class="chat-message chat-message-me chat-msg-deleted-placeholder">
+                        <span class="chat-deleted-text">${t.chat.deletedMsg}</span>
+                    </div>`;
+        }
+
         const isMe = m.author_uid === user?.uid;
         const displayName = getAuthorDisplayName(m);
         const avatar = getAuthorAvatar(m.author_uid);
         const canEdit = isMe && editableIds.has(m.id);
         const isEditing = _editingMessageId === m.id;
+        const isPendingDelete = _pendingDeletes.has(m.id);
         const editedTag = m.edited_at ? `<span class="chat-msg-edited">${t.chat.edited}</span>` : '';
 
         if (isEditing) {
@@ -325,6 +365,15 @@ function renderMessagesList() {
                             <button class="chat-edit-cancel">${t.chat.editCancel}</button>
                         </div>
                     </div>
+                </div>
+            `;
+        }
+
+        if (isPendingDelete) {
+            return `
+                <div class="chat-message chat-message-me chat-msg-deleted-placeholder">
+                    <span class="chat-deleted-text">${t.chat.deletedMsg}</span>
+                    <button class="chat-pending-delete-undo" data-msg-id="${esc(m.id)}">${t.chat.deleteUndo}</button>
                 </div>
             `;
         }
@@ -408,13 +457,19 @@ function wireMessageActions(messagesEl) {
         });
     });
 
-    // Delete buttons
+    // Delete buttons — start 30s countdown instead of immediate delete
     messagesEl.querySelectorAll('.chat-msg-delete').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const user = store.get('user');
-            const svc = await getChatService();
-            svc.deleteMessage(user.familyId, _currentTopicId, btn.dataset.msgId);
+            startPendingDelete(btn.dataset.msgId);
+        });
+    });
+
+    // Undo delete buttons
+    messagesEl.querySelectorAll('.chat-pending-delete-undo').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelPendingDelete(btn.dataset.msgId);
         });
     });
 
@@ -449,6 +504,37 @@ function wireMessageActions(messagesEl) {
     }
 }
 
+// ── Pending delete (30s undo window) ───────────────────────
+
+function startPendingDelete(msgId) {
+    if (_pendingDeletes.has(msgId)) return;
+
+    // Save created_at for ghost positioning after Firestore delete
+    const messages = store.get('chatMessages') || [];
+    const msg = messages.find(m => m.id === msgId);
+    const created_at = msg?.created_at || null;
+
+    const timerId = setTimeout(async () => {
+        _pendingDeletes.delete(msgId);
+        // Keep a permanent ghost placeholder
+        if (created_at) _deletedGhosts.set(msgId, { created_at });
+        const user = store.get('user');
+        const svc = await getChatService();
+        svc.deleteMessage(user.familyId, _currentTopicId, msgId);
+    }, 30000);
+
+    _pendingDeletes.set(msgId, { timerId });
+    renderMessagesUpdate();
+}
+
+function cancelPendingDelete(msgId) {
+    const entry = _pendingDeletes.get(msgId);
+    if (!entry) return;
+    clearTimeout(entry.timerId);
+    _pendingDeletes.delete(msgId);
+    renderMessagesUpdate();
+}
+
 // ── Wire all events ────────────────────────────────────────
 
 function wireEvents() {
@@ -472,6 +558,12 @@ function wireEvents() {
     const newTopicInput = _container.querySelector('#new-topic-input');
     const newTopicSubmit = _container.querySelector('#new-topic-submit');
     const newTopicCancel = _container.querySelector('#new-topic-cancel');
+
+    _container.querySelectorAll('.chat-suggestion-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (newTopicInput) { newTopicInput.value = chip.dataset.suggestion; newTopicInput.focus(); }
+        });
+    });
 
     if (newTopicInput) {
         setTimeout(() => newTopicInput.focus(), 50);
@@ -559,6 +651,7 @@ function wireEvents() {
             if (_currentView === VIEW_TOPIC) {
                 const svc = await getChatService();
                 svc.stopMessages();
+                clearAllPendingDeletes();
             }
             _currentTopicId = null;
             _editingMessageId = null;

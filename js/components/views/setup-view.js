@@ -4,6 +4,7 @@
 // ============================================================
 
 import { esc } from '../../utils/dom-helpers.js';
+import { DEFAULT_MATCHING_TICKERS } from '../../utils/compute.js';
 import { emit } from '../../event-bus.js';
 import * as store from '../../store.js';
 import * as authService from '../../services/auth-service.js';
@@ -42,11 +43,16 @@ function render() {
                         <label for="setup-matching-days">${t.setup.matchingDaysLabel}</label>
                         <input type="number" id="setup-matching-days" value="365" min="1">
                     </div>
+                    <div class="form-group">
+                        <label for="setup-matching-ratio">${t.setup.matchingRatioLabel}</label>
+                        <input type="number" id="setup-matching-ratio" min="0.1" max="10" step="0.1" value="1">
+                        <div class="form-hint">${t.setup.matchingRatioHint}</div>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label for="setup-sp500">${t.setup.sp500Label}</label>
-                    <input type="text" id="setup-sp500" dir="ltr" placeholder="${t.settings.sp500Placeholder}">
-                    <div class="form-hint">${t.setup.sp500Hint}</div>
+                    <label for="setup-matching-tickers">${t.setup.matchingTickersLabel}</label>
+                    <input type="text" id="setup-matching-tickers" dir="ltr" placeholder="${t.setup.matchingTickersHint}" value="${esc(DEFAULT_MATCHING_TICKERS.join(', '))}">
+                    <div class="form-hint">${t.setup.matchingTickersHint}</div>
                 </div>
                 <div id="setup-error" class="auth-error" hidden></div>
                 <button id="setup-create-btn" class="btn btn-primary btn-large" style="width:100%;margin-top:1rem">${t.setup.createBtn}</button>
@@ -73,7 +79,8 @@ async function handleCreate() {
     const familyName = container.querySelector('#setup-family-name').value.trim();
     const currency = container.querySelector('#setup-currency').value.trim() || '₪';
     const matchingDays = parseInt(container.querySelector('#setup-matching-days').value) || 365;
-    const sp500 = container.querySelector('#setup-sp500').value.trim();
+    const matchingRatio = parseFloat(container.querySelector('#setup-matching-ratio').value) || 1;
+    const matchingTickers = container.querySelector('#setup-matching-tickers').value.split(',').map(s => s.trim()).filter(Boolean);
     const errorEl = container.querySelector('#setup-error');
     const btn = container.querySelector('#setup-create-btn');
 
@@ -93,8 +100,10 @@ async function handleCreate() {
         const familyId = await familyService.createFamily({
             family_name: familyName,
             currency_symbol: currency,
-            matching_days: matchingDays,
-            sp500_ticker: sp500,
+            matching_tiers: matchingDays > 0 ? [{ days: matchingDays, ratio: matchingRatio }] : [],
+            matching_tickers: matchingTickers,
+            matching_retroactive: true,
+            matching_activated_at: matchingTickers.length > 0 ? new Date().toISOString().slice(0, 10) : null,
         }, user.uid);
 
         // Add manager as a member of the family

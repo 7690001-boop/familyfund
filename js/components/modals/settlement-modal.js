@@ -69,8 +69,34 @@ export function showSettleBuyModal(request) {
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="settle-price">${t.settlement.buyPriceLabel} (${nativeSym})</label>
-                <input type="number" id="settle-price" step="any" min="0" value="${prefilledPrice}">
+                <label for="settle-date">${t.cash.dateLabel}</label>
+                <input type="date" id="settle-date" value="${todayStr()}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="settle-price">${t.settlement.buyPriceLabel} (${nativeSym})</label>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+                <input type="number" id="settle-price" step="any" min="0" value="${prefilledPrice}" style="flex:1">
+                ${request.ticker ? `<button type="button" id="settle-price-fetch" class="btn btn-ghost btn-sm" title="${t.settlement.fetchPriceBtn}">↺</button>` : ''}
+            </div>
+            ${request.ticker ? `
+            <div class="price-type-bar" id="settle-price-type-bar" style="margin-top:0.35rem">
+                <button type="button" class="price-type-btn active" data-type="close">${t.investment.priceClose}</button>
+                <button type="button" class="price-type-btn" data-type="open">${t.investment.priceOpen}</button>
+                <button type="button" class="price-type-btn" data-type="high">${t.investment.priceHigh}</button>
+                <button type="button" class="price-type-btn" data-type="low">${t.investment.priceLow}</button>
+                <button type="button" class="price-type-btn" data-type="average">${t.investment.priceAverage}</button>
+            </div>
+            <div id="settle-price-status" style="font-size:0.8rem;color:var(--color-text-secondary);min-height:1.2em"></div>
+            ` : ''}
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="settle-amount">${t.settlement.amountLabel} (${ilsSym})</label>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <input type="number" id="settle-amount" step="any" min="0" value="${request.amount_ils || ''}" style="flex:1">
+                    <button type="button" id="calc-units-btn" class="btn btn-ghost btn-sm">${t.investment.calcUnitsBtn}</button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="settle-shares">${t.investment.sharesLabel}</label>
@@ -88,12 +114,6 @@ export function showSettleBuyModal(request) {
         </div>
         ` : ''}
         <div class="fx-equiv" id="settle-total-display" style="margin-bottom:0.75rem"></div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="settle-date">${t.cash.dateLabel}</label>
-                <input type="date" id="settle-date" value="${todayStr()}">
-            </div>
-        </div>
         <div class="form-group">
             <label>${t.settlement.fundingLabel}</label>
             <div class="radio-group">${fundingHtml}</div>
@@ -107,6 +127,7 @@ export function showSettleBuyModal(request) {
     openModal(html);
     const modal = document.getElementById('modal-content');
     let _rate = isFx ? (exchangeRates[nativeCurrency] || null) : null;
+    let _priceData = null;  // fetched historical price data
 
     modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
     modal.querySelector('#settle-shares').focus();
@@ -136,8 +157,87 @@ export function showSettleBuyModal(request) {
             : `${t.settlement.total}: ${ilsSym}${ilsTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
     }
 
+    function calcUnitsFromAmount() {
+        const price = parseFloat(modal.querySelector('#settle-price').value) || 0;
+        const amount = parseFloat(modal.querySelector('#settle-amount').value) || 0;
+        if (price <= 0 || amount <= 0) return;
+        const rate = _rate || 1;
+        const units = isFx ? (amount / rate) / price : amount / price;
+        if (units > 0) {
+            modal.querySelector('#settle-shares').value = +units.toFixed(6);
+            updateBuyTotal();
+        }
+    }
+
     modal.querySelector('#settle-price').addEventListener('input', updateBuyTotal);
     modal.querySelector('#settle-shares').addEventListener('input', updateBuyTotal);
+    modal.querySelector('#settle-amount').addEventListener('input', updateBuyTotal);
+    modal.querySelector('#calc-units-btn').addEventListener('click', calcUnitsFromAmount);
+
+    // Price fetch + type bar
+    if (request.ticker) {
+        const priceTypeBar = modal.querySelector('#settle-price-type-bar');
+        const priceStatus = modal.querySelector('#settle-price-status');
+        const fetchBtn = modal.querySelector('#settle-price-fetch');
+
+        function getSelectedPriceType() {
+            return priceTypeBar.querySelector('.price-type-btn.active')?.dataset.type || 'close';
+        }
+
+        function applyPriceData(data) {
+            _priceData = data;
+            const type = getSelectedPriceType();
+            const val = data[type];
+            if (val != null) {
+                modal.querySelector('#settle-price').value = val;
+                priceStatus.textContent = data.date ? `(${data.date})` : '';
+                updateBuyTotal();
+                // Auto-calculate units if amount is set and shares is empty
+                const sharesVal = modal.querySelector('#settle-shares').value;
+                if (!sharesVal) calcUnitsFromAmount();
+            } else {
+                priceStatus.textContent = t.investment.noDatePrice;
+            }
+        }
+
+        priceTypeBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('.price-type-btn');
+            if (!btn) return;
+            priceTypeBar.querySelectorAll('.price-type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (_priceData) applyPriceData(_priceData);
+        });
+
+        async function fetchPrice() {
+            const date = modal.querySelector('#settle-date').value || todayStr();
+            fetchBtn.disabled = true;
+            priceStatus.textContent = t.investment.loadingPrice;
+            try {
+                const { fetchHistoricalPrice, fetchExchangeRate } = await import('../../services/price-service.js');
+                const data = await fetchHistoricalPrice(request.ticker, date);
+                applyPriceData(data);
+                // Also refresh FX rate for the date if applicable
+                if (isFx && !_rate) {
+                    const rate = await fetchExchangeRate(nativeCurrency);
+                    if (rate) {
+                        _rate = rate;
+                        modal.querySelector('#settle-rate').value = rate;
+                    }
+                }
+            } catch {
+                priceStatus.textContent = t.investment.noDatePrice;
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        fetchBtn.addEventListener('click', fetchPrice);
+        modal.querySelector('#settle-date').addEventListener('change', () => {
+            _priceData = null;
+            priceStatus.textContent = '';
+        });
+    }
+
     updateBuyTotal();
 
     modal.querySelector('#modal-save').addEventListener('click', async () => {
@@ -247,16 +347,24 @@ export function showSettleSellModal(request) {
                 ${kidPref ? `· ${t.settlement.kidWantsCash(currencySymbol(kidPref))}` : ''}
             </div>
         </div>
+        <div class="form-group">
+            <label for="settle-price">${t.cash.salePriceLabel} (${nativeSym})</label>
+            <input type="number" id="settle-price" step="any" min="0" value="${inv.current_price ?? ''}">
+        </div>
         <div class="form-row">
-            <div class="form-group">
-                <label for="settle-price">${t.cash.salePriceLabel} (${nativeSym})</label>
-                <input type="number" id="settle-price" step="any" min="0" value="${inv.current_price ?? ''}">
-            </div>
             <div class="form-group">
                 <label for="settle-shares">${t.settlement.sharesToSellLabel}</label>
                 <input type="number" id="settle-shares" step="any" min="0"
                     ${maxShares != null ? `max="${maxShares}"` : ''}
                     value="${request.shares ?? (maxShares ?? '')}">
+            </div>
+            <div class="form-group">
+                <label for="settle-amount-ils">${t.settlement.sellAmountIlsLabel}</label>
+                <input type="number" id="settle-amount-ils" step="any" min="0">
+            </div>
+            <div class="form-group">
+                <label for="settle-amount-usd">${t.settlement.sellAmountUsdLabel}</label>
+                <input type="number" id="settle-amount-usd" step="any" min="0">
             </div>
         </div>
         ${isFx ? `
@@ -289,6 +397,8 @@ export function showSettleSellModal(request) {
     openModal(html);
     const modal = document.getElementById('modal-content');
     let _rate = currentRate;
+    let _updating = false;
+    const usdRate = exchangeRates['USD'] || 1;
 
     modal.querySelector('#modal-cancel').addEventListener('click', closeModal);
     modal.querySelector('#settle-shares').focus();
@@ -296,12 +406,12 @@ export function showSettleSellModal(request) {
     if (isFx) {
         modal.querySelector('#settle-rate').addEventListener('input', () => {
             _rate = parseFloat(modal.querySelector('#settle-rate').value) || currentRate;
-            updateProceeds();
+            calcFromShares();
         });
         modal.querySelector('#settle-rate-refresh').addEventListener('click', async () => {
             const { fetchExchangeRate } = await import('../../services/price-service.js');
             const rate = await fetchExchangeRate(currency);
-            if (rate) { _rate = rate; modal.querySelector('#settle-rate').value = rate; updateProceeds(); }
+            if (rate) { _rate = rate; modal.querySelector('#settle-rate').value = rate; calcFromShares(); }
         });
     }
 
@@ -317,9 +427,63 @@ export function showSettleSellModal(request) {
             : `${t.cash.proceeds}: ${ilsSym}${nativeTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
     }
 
-    modal.querySelector('#settle-price').addEventListener('input', updateProceeds);
-    modal.querySelector('#settle-shares').addEventListener('input', updateProceeds);
-    updateProceeds();
+    function calcFromShares() {
+        if (_updating) return;
+        _updating = true;
+        const price = parseFloat(modal.querySelector('#settle-price').value) || 0;
+        const shares = parseFloat(modal.querySelector('#settle-shares').value) || 0;
+        if (price > 0 && shares > 0) {
+            const ilsTotal = shares * price * _rate;
+            modal.querySelector('#settle-amount-ils').value = +ilsTotal.toFixed(2);
+            modal.querySelector('#settle-amount-usd').value = +(ilsTotal / usdRate).toFixed(2);
+        } else {
+            modal.querySelector('#settle-amount-ils').value = '';
+            modal.querySelector('#settle-amount-usd').value = '';
+        }
+        _updating = false;
+        updateProceeds();
+    }
+
+    function calcFromIls() {
+        if (_updating) return;
+        _updating = true;
+        const price = parseFloat(modal.querySelector('#settle-price').value) || 0;
+        const ilsTotal = parseFloat(modal.querySelector('#settle-amount-ils').value) || 0;
+        if (price > 0 && ilsTotal > 0) {
+            const shares = ilsTotal / (_rate * price);
+            modal.querySelector('#settle-shares').value = +shares.toFixed(6);
+            modal.querySelector('#settle-amount-usd').value = +(ilsTotal / usdRate).toFixed(2);
+        } else {
+            modal.querySelector('#settle-shares').value = '';
+            modal.querySelector('#settle-amount-usd').value = '';
+        }
+        _updating = false;
+        updateProceeds();
+    }
+
+    function calcFromUsd() {
+        if (_updating) return;
+        _updating = true;
+        const price = parseFloat(modal.querySelector('#settle-price').value) || 0;
+        const usdTotal = parseFloat(modal.querySelector('#settle-amount-usd').value) || 0;
+        if (price > 0 && usdTotal > 0) {
+            const ilsTotal = usdTotal * usdRate;
+            const shares = ilsTotal / (_rate * price);
+            modal.querySelector('#settle-shares').value = +shares.toFixed(6);
+            modal.querySelector('#settle-amount-ils').value = +ilsTotal.toFixed(2);
+        } else {
+            modal.querySelector('#settle-shares').value = '';
+            modal.querySelector('#settle-amount-ils').value = '';
+        }
+        _updating = false;
+        updateProceeds();
+    }
+
+    modal.querySelector('#settle-price').addEventListener('input', calcFromShares);
+    modal.querySelector('#settle-shares').addEventListener('input', calcFromShares);
+    modal.querySelector('#settle-amount-ils').addEventListener('input', calcFromIls);
+    modal.querySelector('#settle-amount-usd').addEventListener('input', calcFromUsd);
+    calcFromShares();
 
     modal.querySelector('#modal-save').addEventListener('click', async () => {
         const price = parseFloat(modal.querySelector('#settle-price').value);

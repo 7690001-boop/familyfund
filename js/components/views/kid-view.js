@@ -122,6 +122,7 @@ function renderView() {
             <div class="jar-side" data-slot="summary"></div>
             <div class="heatmap-main" data-slot="heatmap"></div>
         </section>
+        <section class="section portfolio-chart-section" data-slot="chart"></section>
         <section class="section" data-slot="assets"></section>
         ${canViewRequests ? '<section class="section" data-slot="requests"></section>' : ''}
         <section class="section" data-slot="goals"></section>
@@ -155,6 +156,12 @@ function renderView() {
         }
     );
 
+    // Portfolio performance chart — lazy loaded
+    import('../ui/portfolio-chart.js').then(mod => {
+        const chartSlot = _container?.querySelector('[data-slot="chart"]');
+        if (chartSlot) mod.mount(chartSlot, investments);
+    }).catch(() => {});
+
     assetTable.render(
         _container.querySelector('[data-slot="assets"]'),
         investments,
@@ -168,6 +175,7 @@ function renderView() {
             canSell,
             canAddCash,
             canConvert,
+            matchingDeposits: matching.deposits,
             onAdd: () => showInvestmentModal(_kidName),
             onEdit: (id) => {
                 const inv = allInvestments.find(i => i.id === id);
@@ -175,8 +183,13 @@ function renderView() {
             },
             onDelete: (id) => deleteInvestment(id),
             onToggleHidden: async (id, hidden) => {
-                const { updateHidden } = await import('../../services/investment-service.js');
-                await updateHidden(user.familyId, id, hidden);
+                try {
+                    const { updateHidden } = await import('../../services/investment-service.js');
+                    await updateHidden(user.familyId, id, hidden);
+                } catch (e) {
+                    console.error('Toggle hidden error:', e);
+                    emit('toast', { message: t.errors.updateError, type: 'error' });
+                }
             },
             onRequestBuy: () => showBuyRequestModal(_kidName),
             onRequestSell: (id) => {
@@ -226,8 +239,13 @@ function renderView() {
             },
             onDelete: (id) => deleteGoal(id),
             onReorder: async (id, direction) => {
-                const { reorder } = await import('../../services/goal-service.js');
-                await reorder(user.familyId, id, direction, goals);
+                try {
+                    const { reorder } = await import('../../services/goal-service.js');
+                    await reorder(user.familyId, id, direction, goals);
+                } catch (e) {
+                    console.error('Goal reorder error:', e);
+                    emit('toast', { message: t.errors.updateError, type: 'error' });
+                }
             },
         }
     );
@@ -250,7 +268,7 @@ function renderView() {
 
     matchingSection.render(
         _container.querySelector('[data-slot="matching"]'),
-        matching, family
+        matching, family, summary.totalCurrent
     );
 
     const editAvatarBtn = _container.querySelector('#edit-avatar-btn');

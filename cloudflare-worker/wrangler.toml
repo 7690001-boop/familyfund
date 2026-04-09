@@ -9,12 +9,16 @@ compatibility_date = "2025-01-01"
 #   FIREBASE_SA_EMAIL
 #   FIREBASE_SA_PRIVATE_KEY
 #   RESEND_API_KEY
+#   GEMINI_API_KEY  (get free key from https://aistudio.google.com/apikey)
 
 # KV namespace for brute-force rate limiting on /login
 # Setup: wrangler kv namespace create "RATE_LIMIT"
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
 id = "e2f53eaaa07e4db5812a98d56ecbe52d"
+
+[ai]
+binding = "AI"
 
 [observability]
 enabled = true

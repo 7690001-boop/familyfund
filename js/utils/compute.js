@@ -2,7 +2,7 @@
 // Computation utilities — pure functions for investment math
 // ============================================================
 
-import { daysBetween } from './format.js';
+import { daysBetween, toDateStr } from './format.js';
 import { normalizeTicker } from './id.js';
 import * as store from '../store.js';
 
@@ -193,9 +193,11 @@ export function getRewardMilestone(inv, familyConfig) {
         ? eligibleRaw.map(t => normalizeTicker(t))
         : DEFAULT_REWARD_TICKERS.map(t => normalizeTicker(t));
 
-    // Also include the sp500 ticker if configured
-    const sp500 = familyConfig?.sp500_ticker;
-    if (sp500) eligibleTickers.push(normalizeTicker(sp500));
+    // Also include matching tickers if configured
+    const matchingTickers = familyConfig?.matching_tickers?.length
+        ? familyConfig.matching_tickers
+        : familyConfig?.sp500_ticker ? [familyConfig.sp500_ticker] : [];
+    for (const t of matchingTickers) eligibleTickers.push(normalizeTicker(t));
 
     const ticker = normalizeTicker(inv.ticker || '');
     if (!ticker || !eligibleTickers.includes(ticker)) return null;
@@ -211,27 +213,86 @@ export function getRewardMilestone(inv, familyConfig) {
     return null;
 }
 
-export function computeMatching(investments, familyConfig) {
-    const sp500Ticker = familyConfig?.sp500_ticker;
-    if (!sp500Ticker) return { deposits: [], matched: 0, total: 0 };
+export const DEFAULT_MATCHING_TICKERS = ['VOO', 'SPY', 'CSPX', 'IWDA', 'VWRA'];
 
-    const normalizedSp500 = normalizeTicker(sp500Ticker);
-    const matchingDays = Number(familyConfig.matching_days) || 365;
+// Resolve tiers from family config.
+// Supports new matching_tiers array or falls back to legacy matching_days + matching_ratio.
+export function resolveTiers(familyConfig) {
+    if (familyConfig?.matching_tiers?.length) {
+        return [...familyConfig.matching_tiers].sort((a, b) => a.days - b.days);
+    }
+    const days = Number(familyConfig?.matching_days) || 365;
+    const ratio = Number(familyConfig?.matching_ratio ?? 1);
+    return [{ days, ratio }];
+}
+
+export function computeMatching(investments, familyConfig) {
+    // Resolve matching tickers: new array field, fallback to legacy sp500_ticker, fallback to defaults
+    const rawTickers = familyConfig?.matching_tickers?.length
+        ? familyConfig.matching_tickers
+        : familyConfig?.sp500_ticker
+            ? [familyConfig.sp500_ticker]
+            : [];
+    if (!rawTickers.length) return { deposits: [], matched: 0, total: 0 };
+
+    const normalizedTickers = rawTickers.map(t => normalizeTicker(t));
+    const tiers = resolveTiers(familyConfig);
+    const totalRatio = tiers.reduce((s, t) => s + t.ratio, 0);
+    const retroactive = familyConfig.matching_retroactive !== false; // default true
+    const activatedAt = familyConfig.matching_activated_at || null;
 
     const deposits = investments
-        .filter(inv => normalizeTicker(inv.ticker) === normalizedSp500)
+        .filter(inv => {
+            if (!normalizedTickers.includes(normalizeTicker(inv.ticker))) return false;
+            // Non-retroactive: exclude investments purchased before the program was activated
+            if (!retroactive && activatedAt && inv.purchase_date && inv.purchase_date < activatedAt) return false;
+            return true;
+        })
         .map(inv => {
-            const eligible = inv.daysHeld >= matchingDays;
-            const daysRemaining = eligible ? 0 : matchingDays - inv.daysHeld;
+            const daysHeld = inv.daysHeld ?? 0;
+            const earnedTiers = tiers.filter(t => daysHeld >= t.days);
+            const pendingTiers = tiers.filter(t => daysHeld < t.days);
+
+            const earnedRatio = earnedTiers.reduce((s, t) => s + t.ratio, 0);
+            const shares = inv.shares ?? 0;
+            const earnedShares = shares * earnedRatio;
+            const potentialShares = shares * totalRatio;
+
+            const eligible = earnedShares > 0;
+            const allEligible = pendingTiers.length === 0;
+
+            const nextTier = pendingTiers[0] ?? null;
+            const lastEarnedTier = earnedTiers.length > 0 ? earnedTiers[earnedTiers.length - 1] : null;
+            const prevTierDays = lastEarnedTier?.days ?? 0;
+            const nextTierDays = nextTier?.days ?? tiers[tiers.length - 1]?.days ?? 365;
+
+            const daysRemaining = nextTier ? nextTier.days - daysHeld : 0;
+            const nextTierShares = nextTier ? shares * nextTier.ratio : 0;
+
+            const purchaseMs = inv.purchase_date ? new Date(inv.purchase_date).getTime() : null;
+            const unlockDate = nextTier && purchaseMs
+                ? toDateStr(new Date(purchaseMs + nextTier.days * 86400000))
+                : null;
+
+            const currentPriceILS = (inv.currentPrice ?? 0) * (inv.exchangeRate ?? 1);
+            const matchedAmount = earnedShares * currentPriceILS;
+
             return {
                 ...inv,
                 eligible,
+                allEligible,
                 daysRemaining,
-                matchedAmount: eligible ? inv.amountInvested : 0,
+                prevTierDays,
+                nextTierDays,
+                potentialShares,
+                matchedShares: earnedShares,
+                matchedAmount,
+                unlockDate,
+                nextTierShares,
             };
         });
 
     const matched = deposits.reduce((s, d) => s + d.matchedAmount, 0);
-    const total = deposits.reduce((s, d) => s + d.amountInvested, 0);
+    const total = deposits.reduce((s, d) => s + d.potentialShares * ((d.currentPrice ?? 0) * (d.exchangeRate ?? 1)), 0);
     return { deposits, matched, total };
 }

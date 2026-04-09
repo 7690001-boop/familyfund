@@ -2,11 +2,12 @@
 // Asset Table — investment table component
 // ============================================================
 
-import { formatCurrency, formatPct, formatDate, currencySymbol } from '../../utils/format.js';
+import { formatCurrency, formatPct, formatDate, formatShares, currencySymbol } from '../../utils/format.js';
 import { esc, cellGainLossClass } from '../../utils/dom-helpers.js';
 import { emit } from '../../event-bus.js';
 import * as store from '../../store.js';
 import { aggregateByTicker, getRewardMilestone } from '../../utils/compute.js';
+import { normalizeTicker } from '../../utils/id.js';
 import t from '../../i18n.js';
 
 let _currentSort = { key: 'purchase_date', dir: 'desc' };
@@ -45,11 +46,20 @@ function sortInvestments(investments, sortKey, sortDir) {
 export function render(container, investments, options = {}) {
     const { canEdit = false, canAdd = false, showHiddenBadge = false, canToggleHidden = false,
             canRequestBuy = false, canRequestSell = false, canSell = false,
-            canAddCash = false, canConvert = false,
+            canAddCash = false, canConvert = false, matchingDeposits = [],
             onAdd, onEdit, onDelete, onToggleHidden, onRequestBuy, onRequestSell,
             onSell, onAddCash, onConvert, onRowClick } = options;
     const family = store.get('family') || {};
     const ilsSym = family.currency_symbol || '₪';
+
+    // Build id → deposit map for O(1) vesting lookup
+    const vestingMap = new Map(matchingDeposits.map(d => [d.id, d]));
+
+    // Set of normalized tickers that participate in the bonus program
+    const rawBonusTickers = family.matching_tickers?.length
+        ? family.matching_tickers
+        : family.sp500_ticker ? [family.sp500_ticker] : [];
+    const bonusTickerSet = new Set(rawBonusTickers.map(t => normalizeTicker(t)));
 
     if (investments.length === 0) {
         container.innerHTML = `
@@ -145,7 +155,32 @@ export function render(container, investments, options = {}) {
             // Ticker + currency under the name
             const tickerLine = pos.ticker ? `<span class="cell-line-sub asset-ticker">${esc(pos.ticker)}${isFx ? ` · ${esc(currency)}` : ''}</span>` : '';
             const noteDot = pos.note ? ' <span class="note-dot" title="יש הערה">📝</span>' : '';
-            const nameCell = `<span class="cell-line-main">${esc(pos.asset_name || pos.ticker || '—')}${posHiddenBadge}${noteDot}</span>${tickerLine}${countBadge}`;
+
+            // Bonus program badge — shown when this ticker participates in the bonus program
+            const isBonusTicker = bonusTickerSet.size > 0 && bonusTickerSet.has(normalizeTicker(pos.ticker || ''));
+            const posBonusBadge = isBonusTicker
+                ? `<span class="bonus-eligible-badge">⭐ ${t.matching.title}</span>` : '';
+
+            // Consolidated vesting summary — match deposits by ticker (all deposits, not just firstId)
+            const posDeposits = matchingDeposits.filter(d => normalizeTicker(d.ticker) === normalizeTicker(pos.ticker || ''));
+            let posVestingHtml = '';
+            if (posDeposits.length > 0) {
+                const eligibleCount = posDeposits.filter(d => d.eligible).length;
+                const pendingCount = posDeposits.length - eligibleCount;
+                const totalEarnedShares = posDeposits.reduce((s, d) => s + (d.matchedShares ?? 0), 0);
+                const totalPotentialShares = posDeposits.reduce((s, d) => s + (d.potentialShares ?? 0), 0);
+                if (eligibleCount > 0 && pendingCount === 0) {
+                    posVestingHtml = `<span class="vesting-badge vesting-badge--eligible">🔓 +${formatShares(totalEarnedShares)} ${t.matching.sharesLabel}</span>`;
+                } else if (eligibleCount > 0) {
+                    const minDays = Math.min(...posDeposits.filter(d => !d.eligible).map(d => d.daysRemaining));
+                    posVestingHtml = `<span class="vesting-badge vesting-badge--eligible">🔓 +${formatShares(totalEarnedShares)} ${t.matching.sharesLabel}</span><span class="vesting-badge vesting-badge--pending">🔒 ${pendingCount} · ${t.matching.daysLeft(minDays)}</span>`;
+                } else {
+                    const minDays = Math.min(...posDeposits.map(d => d.daysRemaining));
+                    posVestingHtml = `<span class="vesting-badge vesting-badge--pending">🔒 +${formatShares(totalPotentialShares)} ${t.matching.sharesLabel} · ${t.matching.daysLeft(minDays)}</span>`;
+                }
+            }
+
+            const nameCell = `<span class="cell-line-main"><span dir="ltr">${esc(pos.asset_name || pos.ticker || '—')}</span>${posHiddenBadge}${noteDot}</span>${tickerLine}${posBonusBadge}${countBadge}${posVestingHtml}`;
 
             // Actions on consolidated row
             const isCash = (pos.ticker || '').toUpperCase() === 'CASH' || (pos.asset_name || '').includes('מזומן');
@@ -168,12 +203,12 @@ export function render(container, investments, options = {}) {
             }
 
             posRows += `<tr class="pos-row${pos.someHidden ? ' asset-row-hidden' : ''}" data-pos-id="${esc(pos.firstId || '')}">
-                <td>${nameCell}</td>
-                <td class="cell-number">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td>
-                <td class="cell-number">${investedCell}</td>
-                <td class="cell-number">${priceCell}</td>
-                <td class="cell-number">${valueCell}</td>
-                <td class="cell-number ${glClass}">${plCell}</td>
+                <td data-label="${t.assets.headerAsset}">${nameCell}</td>
+                <td class="cell-number" data-label="${t.assets.headerShares}">${pos.totalShares > 0 ? pos.totalShares.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td>
+                <td class="cell-number" data-label="${t.assets.headerInvested}">${investedCell}</td>
+                <td class="cell-number" data-label="${t.assets.headerCurrentPrice}">${priceCell}</td>
+                <td class="cell-number" data-label="${t.assets.headerCurrentValue}">${valueCell}</td>
+                <td class="cell-number ${glClass}" data-label="${t.assets.headerGainLoss}">${plCell}</td>
                 ${posActionsCol}
             </tr>`;
         });
@@ -264,18 +299,44 @@ export function render(container, investments, options = {}) {
         // Ticker + currency under the name
         const tickerSub = inv.ticker ? `<span class="cell-line-sub asset-ticker">${esc(inv.ticker)}${isFx ? ` · ${esc(currency)}` : ''}</span>` : '';
         const noteDot = inv.note ? ' <span class="note-dot" title="יש הערה">📝</span>' : '';
+
+        // Bonus program badge — ticker participates in the bonus program
+        const isInBonusProgram = !isCash && bonusTickerSet.size > 0 && bonusTickerSet.has(normalizeTicker(inv.ticker || ''));
+        const bonusBadgeHtml = isInBonusProgram
+            ? `<span class="bonus-eligible-badge">⭐ ${t.matching.title}</span>` : '';
+
+        // Vesting badge — shown if this investment is part of the matching program
+        const vestingDeposit = vestingMap.get(inv.id);
+        let vestingHtml = '';
+        if (vestingDeposit) {
+            const prevDays = vestingDeposit.prevTierDays ?? 0;
+            const nextDays = vestingDeposit.nextTierDays ?? (Number(family.matching_days) || 365);
+            const tierWindow = nextDays - prevDays;
+            const holdPct = tierWindow > 0
+                ? Math.min(Math.round(((vestingDeposit.daysHeld - prevDays) / tierWindow) * 100), 100)
+                : 100;
+            if (vestingDeposit.eligible) {
+                vestingHtml = `<span class="vesting-badge vesting-badge--eligible">🔓 +${formatShares(vestingDeposit.matchedShares)} ${t.matching.sharesLabel}</span>`;
+            } else {
+                vestingHtml = `<span class="vesting-badge vesting-badge--pending">
+                    🔒 +${formatShares(vestingDeposit.potentialShares)} ${t.matching.sharesLabel} · ${t.matching.daysLeft(vestingDeposit.daysRemaining)}
+                    <span class="vesting-mini-bar"><span class="vesting-mini-fill" style="width:${holdPct}%"></span></span>
+                </span>`;
+            }
+        }
+
         const nameCell = inv.nickname
-            ? `<span class="cell-line-main">${esc(inv.nickname)}${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span><span class="cell-line-sub">${esc(inv.asset_name || '')}</span>${tickerSub}`
-            : `<span class="cell-line-main">${esc(inv.asset_name || '—')}${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span>${tickerSub}`;
+            ? `<span class="cell-line-main"><span dir="ltr">${esc(inv.nickname)}</span>${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span><span class="cell-line-sub" dir="ltr">${esc(inv.asset_name || '')}</span>${tickerSub}${bonusBadgeHtml}${vestingHtml}`
+            : `<span class="cell-line-main"><span dir="ltr">${esc(inv.asset_name || '—')}</span>${cashBadgeHtml}${hiddenBadgeHtml}${rewardBadgeHtml}${noteDot}</span>${tickerSub}${bonusBadgeHtml}${vestingHtml}`;
 
         rows += `<tr${inv.hidden ? ' class="asset-row-hidden"' : ''}>
-            <td>${nameCell}</td>
-            <td>${formatDate(inv.purchase_date)}</td>
-            <td class="cell-number">${sharesFormatted}</td>
-            <td class="cell-number">${investedCell}</td>
-            <td class="cell-number">${priceCell}</td>
-            <td class="cell-number">${valueCell}</td>
-            <td class="cell-number ${glClass}">${plCell}</td>
+            <td data-label="${t.assets.headerAsset}">${nameCell}</td>
+            <td data-label="${t.assets.headerDate}">${formatDate(inv.purchase_date)}</td>
+            <td class="cell-number" data-label="${t.assets.headerShares}">${sharesFormatted}</td>
+            <td class="cell-number" data-label="${t.assets.headerInvested}">${investedCell}</td>
+            <td class="cell-number" data-label="${t.assets.headerCurrentPrice}">${priceCell}</td>
+            <td class="cell-number" data-label="${t.assets.headerCurrentValue}">${valueCell}</td>
+            <td class="cell-number ${glClass}" data-label="${t.assets.headerGainLoss}">${plCell}</td>
         </tr>`;
     });
 

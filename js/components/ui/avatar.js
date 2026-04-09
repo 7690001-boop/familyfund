@@ -20,6 +20,7 @@ export const DEFAULT_AVATAR = {
     freckles: false,
     bgColor: '#E8DAEF',
     shoulders: 'none',
+    animalType: 'none',
 };
 
 export const SKIN_COLORS = [
@@ -61,6 +62,7 @@ export const HAIR_OPTIONS      = ['short', 'pixie', 'buzz', 'spiky', 'mohawk', '
 export const ACCESSORY_OPTIONS = ['hat', 'crown', 'bow', 'headband', 'flower', 'star', 'cap', 'beanie', 'earrings', 'bandana', 'tiara', 'butterfly', 'hearts', 'monocle', 'necklace', 'scarf'];
 export const GLASSES_OPTIONS   = ['none', 'round', 'square', 'cat-eye', 'aviator', 'heart-glasses'];
 export const SHOULDERS_OPTIONS = ['none', 'plain', 'tshirt', 'hoodie', 'collar', 'dress'];
+export const ANIMAL_OPTIONS    = ['none', 'cat', 'dog', 'rabbit', 'fox', 'bear', 'frog', 'penguin', 'panda', 'lion'];
 
 export const LABELS            = t.avatar.labels;
 export const FACE_SHAPE_LABELS = t.avatar.faceShapes;
@@ -71,6 +73,7 @@ export const HAIR_LABELS       = t.avatar.hair;
 export const ACCESSORY_LABELS  = t.avatar.accessories;
 export const GLASSES_LABELS    = t.avatar.glasses;
 export const SHOULDERS_LABELS  = t.avatar.shoulders;
+export const ANIMAL_LABELS     = t.avatar.animalTypes;
 
 // ---- SVG Part Generators ----
 
@@ -806,6 +809,168 @@ function accessoryPart(type) {
     }
 }
 
+// ---- Animal Head Parts ----
+// Elements drawn BEHIND the head: lion mane, dog floppy ears
+function animalBehind(type, fur, hairColor) {
+    switch (type) {
+        case 'dog':
+            return `
+                <ellipse cx="19" cy="74" rx="16" ry="23" fill="${fur}" opacity="0.92"/>
+                <ellipse cx="19" cy="76" rx="10" ry="17" fill="black" opacity="0.06"/>
+                <ellipse cx="101" cy="74" rx="16" ry="23" fill="${fur}" opacity="0.92"/>
+                <ellipse cx="101" cy="76" rx="10" ry="17" fill="black" opacity="0.06"/>
+            `;
+        case 'lion':
+            return `<circle cx="60" cy="65" r="54" fill="${hairColor}" opacity="0.78"/>`;
+        default:
+            return '';
+    }
+}
+
+// The main animal head shape + fixed ears (replaces headShape + ears)
+function animalHead(type, fur, hairColor) {
+    const hl = `<ellipse cx="46" cy="42" rx="18" ry="12" fill="white" opacity="0.1"/>`;
+    switch (type) {
+        case 'cat':
+            return `
+                <path d="M26 40 L36 4 L54 30Z" fill="${fur}"/>
+                <path d="M94 40 L84 4 L66 30Z" fill="${fur}"/>
+                <path d="M29 38 L36 8 L52 28Z" fill="#ffb6c1" opacity="0.55"/>
+                <path d="M91 38 L84 8 L68 28Z" fill="#ffb6c1" opacity="0.55"/>
+                <ellipse cx="60" cy="65" rx="38" ry="36" fill="${fur}"/>${hl}
+            `;
+        case 'dog':
+            return `<ellipse cx="60" cy="63" rx="38" ry="38" fill="${fur}"/>${hl}`;
+        case 'rabbit':
+            return `
+                <ellipse cx="40" cy="26" rx="13" ry="24" fill="${fur}"/>
+                <ellipse cx="80" cy="26" rx="13" ry="24" fill="${fur}"/>
+                <ellipse cx="40" cy="27" rx="7" ry="18" fill="#ffb6c1" opacity="0.5"/>
+                <ellipse cx="80" cy="27" rx="7" ry="18" fill="#ffb6c1" opacity="0.5"/>
+                <ellipse cx="60" cy="68" rx="36" ry="34" fill="${fur}"/>${hl}
+            `;
+        case 'fox':
+            return `
+                <path d="M24 38 L32 4 L52 30Z" fill="${fur}"/>
+                <path d="M96 38 L88 4 L68 30Z" fill="${fur}"/>
+                <path d="M27 36 L32 8 L50 28Z" fill="#E67E22" opacity="0.65"/>
+                <path d="M93 36 L88 8 L70 28Z" fill="#E67E22" opacity="0.65"/>
+                <ellipse cx="60" cy="65" rx="38" ry="36" fill="${fur}"/>${hl}
+            `;
+        case 'bear':
+            return `
+                <circle cx="28" cy="28" r="17" fill="${fur}"/>
+                <circle cx="92" cy="28" r="17" fill="${fur}"/>
+                <circle cx="28" cy="28" r="10" fill="black" opacity="0.12"/>
+                <circle cx="92" cy="28" r="10" fill="black" opacity="0.12"/>
+                <ellipse cx="60" cy="67" rx="42" ry="40" fill="${fur}"/>${hl}
+            `;
+        case 'frog':
+            return `
+                <circle cx="38" cy="52" r="17" fill="${fur}"/>
+                <circle cx="82" cy="52" r="17" fill="${fur}"/>
+                <ellipse cx="60" cy="73" rx="44" ry="30" fill="${fur}"/>
+                <ellipse cx="60" cy="62" rx="36" ry="26" fill="${fur}"/>${hl}
+            `;
+        case 'penguin':
+            return `
+                <ellipse cx="60" cy="63" rx="36" ry="38" fill="${fur}"/>
+                <ellipse cx="60" cy="68" rx="22" ry="27" fill="white" opacity="0.9"/>${hl}
+            `;
+        case 'panda':
+            return `
+                <circle cx="28" cy="26" r="18" fill="${hairColor}"/>
+                <circle cx="92" cy="26" r="18" fill="${hairColor}"/>
+                <ellipse cx="60" cy="65" rx="40" ry="40" fill="${fur}"/>
+                <ellipse cx="44" cy="57" rx="14" ry="12" fill="${hairColor}" opacity="0.88"/>
+                <ellipse cx="76" cy="57" rx="14" ry="12" fill="${hairColor}" opacity="0.88"/>${hl}
+            `;
+        case 'lion':
+            return `
+                <path d="M28 42 L36 20 L50 38Z" fill="${fur}"/>
+                <path d="M92 42 L84 20 L70 38Z" fill="${fur}"/>
+                <ellipse cx="60" cy="66" rx="38" ry="36" fill="${fur}"/>${hl}
+            `;
+        default:
+            return '';
+    }
+}
+
+// Muzzle / nose / whiskers drawn AFTER face features (replaces nose() for animals)
+// For penguin and frog, also draws the mouth (mouthPart is skipped for those)
+function animalMuzzle(type, fur) {
+    switch (type) {
+        case 'cat':
+            return `
+                <ellipse cx="60" cy="78" rx="13" ry="8" fill="white" opacity="0.28"/>
+                <path d="M56 70 L60 75 L64 70 Q60 66 56 70Z" fill="#e84393" opacity="0.85"/>
+                <line x1="14" y1="70" x2="47" y2="74" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+                <line x1="14" y1="76" x2="47" y2="76" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+                <line x1="14" y1="82" x2="47" y2="78" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+                <line x1="106" y1="70" x2="73" y2="74" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+                <line x1="106" y1="76" x2="73" y2="76" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+                <line x1="106" y1="82" x2="73" y2="78" stroke="#9b9b9b" stroke-width="1.1" opacity="0.6"/>
+            `;
+        case 'dog':
+            return `
+                <ellipse cx="60" cy="78" rx="19" ry="14" fill="white" opacity="0.35"/>
+                <ellipse cx="60" cy="71" rx="10" ry="7" fill="#1a1a1a" opacity="0.82"/>
+                <ellipse cx="57" cy="69" rx="3.5" ry="2.5" fill="white" opacity="0.3"/>
+            `;
+        case 'rabbit':
+            return `
+                <ellipse cx="60" cy="74" rx="5" ry="4" fill="#ffb6c1" opacity="0.9"/>
+                <line x1="60" y1="74" x2="60" y2="78" stroke="#cc8899" stroke-width="1.4" stroke-linecap="round"/>
+            `;
+        case 'fox':
+            return `
+                <ellipse cx="60" cy="80" rx="15" ry="10" fill="white" opacity="0.52"/>
+                <ellipse cx="60" cy="71" rx="6" ry="4.5" fill="#1a1a1a" opacity="0.82"/>
+                <ellipse cx="58" cy="70" rx="2" ry="1.5" fill="white" opacity="0.32"/>
+                <line x1="18" y1="73" x2="46" y2="76" stroke="#bbb" stroke-width="1.1" opacity="0.5"/>
+                <line x1="18" y1="79" x2="46" y2="79" stroke="#bbb" stroke-width="1.1" opacity="0.5"/>
+                <line x1="102" y1="73" x2="74" y2="76" stroke="#bbb" stroke-width="1.1" opacity="0.5"/>
+                <line x1="102" y1="79" x2="74" y2="79" stroke="#bbb" stroke-width="1.1" opacity="0.5"/>
+            `;
+        case 'bear':
+            return `
+                <ellipse cx="60" cy="81" rx="19" ry="13" fill="${fur}" opacity="0.6"/>
+                <ellipse cx="60" cy="79" rx="14" ry="9" fill="white" opacity="0.2"/>
+                <ellipse cx="60" cy="72" rx="11" ry="7.5" fill="#1a1a1a" opacity="0.8"/>
+                <ellipse cx="57" cy="70" rx="4" ry="3" fill="white" opacity="0.28"/>
+            `;
+        case 'frog':
+            return `
+                <circle cx="56" cy="74" r="2.8" fill="black" opacity="0.28"/>
+                <circle cx="64" cy="74" r="2.8" fill="black" opacity="0.28"/>
+                <path d="M26 84 Q60 104 94 84" fill="none" stroke="#2d6a27" stroke-width="2.8" stroke-linecap="round" opacity="0.85"/>
+            `;
+        case 'penguin':
+            return `
+                <path d="M52 76 L60 90 L68 76 Q60 73 52 76Z" fill="#FF8C00"/>
+                <line x1="53" y1="83" x2="67" y2="83" stroke="#D4780A" stroke-width="1.2" opacity="0.5"/>
+                <ellipse cx="59" cy="78" rx="3" ry="1.5" fill="white" opacity="0.25"/>
+            `;
+        case 'panda':
+            return `
+                <ellipse cx="60" cy="78" rx="13" ry="9" fill="white" opacity="0.5"/>
+                <ellipse cx="60" cy="71" rx="7" ry="5" fill="#1a1a1a" opacity="0.82"/>
+                <ellipse cx="58" cy="70" rx="2.5" ry="2" fill="white" opacity="0.3"/>
+            `;
+        case 'lion':
+            return `
+                <ellipse cx="60" cy="79" rx="16" ry="10" fill="white" opacity="0.4"/>
+                <path d="M54 70 L60 76 L66 70 Q60 65 54 70Z" fill="#D4829A" opacity="0.88"/>
+                <line x1="16" y1="73" x2="46" y2="76" stroke="#ccc" stroke-width="1.2" opacity="0.52"/>
+                <line x1="16" y1="79" x2="46" y2="79" stroke="#ccc" stroke-width="1.2" opacity="0.52"/>
+                <line x1="104" y1="73" x2="74" y2="76" stroke="#ccc" stroke-width="1.2" opacity="0.52"/>
+                <line x1="104" y1="79" x2="74" y2="79" stroke="#ccc" stroke-width="1.2" opacity="0.52"/>
+            `;
+        default:
+            return '';
+    }
+}
+
 function shouldersPart(type, skin) {
     const neck = `<ellipse cx="60" cy="108" rx="10" ry="7" fill="${skin}"/>`;
     switch (type) {
@@ -907,6 +1072,9 @@ export function renderAvatar(config = {}, size = 48) {
     const wh = (html) => brimY ? `<g clip-path="url(#${id}-hc)">${html}</g>` : html;
 
     const withShoulders = c.shoulders && c.shoulders !== 'none';
+    const isAnimal = c.animalType && c.animalType !== 'none';
+    // Penguin/frog have their own fixed mouth drawn in animalMuzzle
+    const animalSkipMouth = isAnimal && (c.animalType === 'penguin' || c.animalType === 'frog');
 
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="${size}" height="${size}">
@@ -922,13 +1090,14 @@ export function renderAvatar(config = {}, size = 48) {
     <circle cx="60" cy="60" r="58" fill="url(#${id}-bg)"/>
     ${shouldersPart(c.shoulders, c.skin)}
     ${wh(hairBehind(c.hair, c.hairColor, withShoulders))}
-    ${ears(c.skin, c.faceShape)}
-    ${headShape(c.skin, c.faceShape)}
+    ${isAnimal ? animalBehind(c.animalType, c.skin, c.hairColor) : ''}
+    ${isAnimal ? '' : ears(c.skin, c.faceShape)}
+    ${isAnimal ? animalHead(c.animalType, c.skin, c.hairColor) : headShape(c.skin, c.faceShape)}
     ${eyebrowsPart(c.eyebrows, c.hairColor)}
     ${eyesPart(c.eyes, c.eyeColor)}
     ${glassesPart(c.glasses)}
-    ${nose()}
-    ${mouthPart(c.mouth)}
+    ${isAnimal ? animalMuzzle(c.animalType, c.skin) : nose()}
+    ${animalSkipMouth ? '' : mouthPart(c.mouth)}
     ${blush()}
     ${frecklesPart(c.freckles)}
     ${wh(hairPart(c.hair, c.hairColor))}

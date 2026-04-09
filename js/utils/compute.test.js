@@ -515,9 +515,10 @@ describe('computeMatching', () => {
     });
 
     it('marks deposit as eligible when daysHeld >= matching_days', () => {
-        const investments = [{ ticker: 'SPY', amountInvested: 1000, daysHeld: 400 }];
+        const investments = [{ ticker: 'SPY', amountInvested: 1000, shares: 5, currentPrice: 200, exchangeRate: 1, daysHeld: 400 }];
         const result = computeMatching(investments, config);
         expect(result.deposits[0].eligible).toBe(true);
+        expect(result.deposits[0].matchedShares).toBe(5);
         expect(result.deposits[0].matchedAmount).toBe(1000);
         expect(result.deposits[0].daysRemaining).toBe(0);
         expect(result.matched).toBe(1000);
@@ -525,9 +526,10 @@ describe('computeMatching', () => {
     });
 
     it('marks deposit as ineligible when daysHeld < matching_days', () => {
-        const investments = [{ ticker: 'SPY', amountInvested: 500, daysHeld: 100 }];
+        const investments = [{ ticker: 'SPY', amountInvested: 500, shares: 5, currentPrice: 100, exchangeRate: 1, daysHeld: 100 }];
         const result = computeMatching(investments, config);
         expect(result.deposits[0].eligible).toBe(false);
+        expect(result.deposits[0].matchedShares).toBe(0);
         expect(result.deposits[0].matchedAmount).toBe(0);
         expect(result.deposits[0].daysRemaining).toBe(265);
         expect(result.matched).toBe(0);
@@ -535,8 +537,8 @@ describe('computeMatching', () => {
 
     it('filters out non-SP500 tickers', () => {
         const investments = [
-            { ticker: 'SPY',  amountInvested: 1000, daysHeld: 400 },
-            { ticker: 'AAPL', amountInvested: 500,  daysHeld: 400 },
+            { ticker: 'SPY',  amountInvested: 1000, shares: 5, currentPrice: 200, exchangeRate: 1, daysHeld: 400 },
+            { ticker: 'AAPL', amountInvested: 500,  shares: 5, currentPrice: 100, exchangeRate: 1, daysHeld: 400 },
         ];
         const result = computeMatching(investments, config);
         expect(result.deposits).toHaveLength(1);
@@ -544,7 +546,7 @@ describe('computeMatching', () => {
     });
 
     it('normalizes tickers — "XNAS:SPY" matches sp500_ticker "SPY"', () => {
-        const investments = [{ ticker: 'XNAS:SPY', amountInvested: 800, daysHeld: 400 }];
+        const investments = [{ ticker: 'XNAS:SPY', amountInvested: 800, shares: 4, currentPrice: 200, exchangeRate: 1, daysHeld: 400 }];
         const result = computeMatching(investments, config);
         expect(result.deposits).toHaveLength(1);
         expect(result.matched).toBe(800);
@@ -559,12 +561,12 @@ describe('computeMatching', () => {
 
     it('sums matched and total across multiple deposits', () => {
         const investments = [
-            { ticker: 'SPY', amountInvested: 1000, daysHeld: 400 }, // eligible
-            { ticker: 'SPY', amountInvested: 500,  daysHeld: 200 }, // ineligible
-            { ticker: 'SPY', amountInvested: 700,  daysHeld: 500 }, // eligible
+            { ticker: 'SPY', amountInvested: 1000, shares: 10, currentPrice: 100, exchangeRate: 1, daysHeld: 400 }, // eligible
+            { ticker: 'SPY', amountInvested: 500,  shares: 5,  currentPrice: 100, exchangeRate: 1, daysHeld: 200 }, // ineligible
+            { ticker: 'SPY', amountInvested: 700,  shares: 7,  currentPrice: 100, exchangeRate: 1, daysHeld: 500 }, // eligible
         ];
         const result = computeMatching(investments, config);
-        expect(result.matched).toBe(1700); // 1000 + 700
-        expect(result.total).toBe(2200);   // all three
+        expect(result.matched).toBe(1700); // (10+7)*100 = 1700
+        expect(result.total).toBe(2200);   // (10+5+7)*100 = 2200
     });
 });

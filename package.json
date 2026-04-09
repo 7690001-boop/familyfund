@@ -2,13 +2,16 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "cd cloudflare-worker && wrangler deploy --config wrangler.toml",
+    "preview": "cd cloudflare-worker && wrangler dev --config wrangler.toml",
+    "tail": "cd cloudflare-worker && wrangler tail yahoo-proxy --format pretty"
   },
   "dependencies": {
     "firebase": "^12.9.0"
   },
   "devDependencies": {
     "vitest": "^2.1.9",
-    "wrangler": "^4.71.0"
+    "wrangler": "^4.78.0"
   }
 }

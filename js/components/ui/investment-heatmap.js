@@ -140,16 +140,20 @@ export function render(container, investments, { familyId, sym = '₪', canEdit 
         const avgCost = pos.avgCostNative != null
             ? formatCurrency(pos.avgCostNative, avgCostSym, 2) : '—';
         const currentVal = formatCurrency(value, sym);
+        // Width = exact portfolio percentage (proportional, container-relative)
+        // Height grows with percentage so large positions get more visual weight
+        const tileWidth = `calc(${flexVal.toFixed(1)}% - 0.7rem)`;
+        const tileHeight = Math.max(76, Math.min(164, 76 + pct * 400));
 
         return `<div class="heatmap-tile"
-            style="flex: ${flexVal}; background: ${color.bg}; border-color: ${color.border};"
+            style="flex: 0 0 ${tileWidth}; min-height: ${tileHeight.toFixed(0)}px; background: ${color.bg}; border-color: ${color.border};"
             data-pos-idx="${i}"
             data-pct="${pct}"
             role="button"
             tabindex="0"
             aria-label="${esc(name)}, ${pctDisplay}% מהתיק, שווי ${currentVal}">
             <div class="heatmap-tile-icon">${color.icon}</div>
-            <div class="heatmap-tile-name">${esc(displayName)}</div>
+            <div class="heatmap-tile-name" dir="ltr">${esc(displayName)}</div>
             ${pos.ticker && pos.ticker !== pos.asset_name
                 ? `<div class="heatmap-tile-ticker">${esc(pos.ticker)}</div>` : ''}
             <div class="heatmap-tile-value">${currentVal}</div>

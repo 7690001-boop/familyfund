@@ -43,6 +43,12 @@ export function toDateStr(d) {
     return d.toISOString().slice(0, 10);
 }
 
+export function formatShares(n) {
+    if (n == null || isNaN(n)) return '—';
+    if (Number.isInteger(n)) return n.toLocaleString('en-US');
+    return n.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 4 });
+}
+
 export function daysBetween(dateStr) {
     if (!dateStr) return 0;
     const d = new Date(dateStr);
